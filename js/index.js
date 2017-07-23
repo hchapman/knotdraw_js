@@ -1,11 +1,9 @@
+let lab = new Lalolab();
+
 function least_squares(X /* : Matrix */, Y /* : Matrix */) /* : least_squares */ {
-    let XX = math.transpose(X);
+    let betaHat = solve(mul(X, transpose(X)), mul(X, Y));
 
-    let YY = Y;
-    let betaHat = math.lusolve(math.multiply(math.transpose(XX), XX),
-                               math.multiply(math.transpose(XX), YY));
-
-    return(betaHat);
+    return betaHat;
 }
 
 class MeshEdge {
@@ -73,10 +71,10 @@ class MeshDraw {
         this.g = g;
 
         // alter the viewbox to fit
-        let min_x = math.min(math.subset(points, math.index(math.range(0, math.size(points).toArray()[0]), 0)));
-        let max_x = math.max(math.subset(points, math.index(math.range(0, math.size(points).toArray()[0]), 0)));
-        let min_y = math.min(math.subset(points, math.index(math.range(0, math.size(points).toArray()[0]), 1)));
-        let max_y = math.max(math.subset(points, math.index(math.range(0, math.size(points).toArray()[0]), 1)));
+        let min_x = min(get(points, range(), 0));
+        let min_y = min(get(points, range(), 1));
+        let max_x = max(get(points, range(), 0));
+        let max_y = max(get(points, range(), 1));
 
         let wid = max_x-min_x;
         let hgt = max_y-min_y;
@@ -122,15 +120,15 @@ class MeshDraw {
             if (last_ep != undefined) {
                 // We really want to push 'center' points as anchor points and
                 // real points as control points
-                let dp = math.subtract(last_ep, vp);
+                let dp = sub(last_ep, vp);
 
                 // Find center point by linear interpolation; whole way across is
                 // |dp| \approx this.g.gamma[vi]+this.g.gamma[ei]
-                let whole_l = math.norm(dp);
+                let whole_l = norm(dp);
 
                 // We only want to go this.g.gamma[vi]/|dp| of the way:
-                let mid_dp = math.multiply(this.g.gamma[vi]/whole_l, dp);
-                let mp = math.add(vp, mid_dp);
+                let mid_dp = mul(this.g.gamma[vi]/whole_l, dp);
+                let mp = add(vp, mid_dp);
 
                 path.push(mp);
                 path.push(vp);
@@ -138,15 +136,15 @@ class MeshDraw {
 
             // We really want to push 'center' points as anchor points and
             // real points as control points
-            let dp = math.subtract(ep, vp); // ep - vp; notice vp + dp = ep
+            let dp = sub(ep, vp); // ep - vp; notice vp + dp = ep
 
             // Find center point by linear interpolation; whole way across is
             // |dp| \approx this.g.gamma[vi]+this.g.gamma[ei]
-            let whole_l = math.norm(dp);
+            let whole_l = norm(dp);
 
             // We only want to go this.g.gamma[vi]/|dp| of the way:
-            let mid_dp = math.multiply(this.g.gamma[vi]/whole_l, dp);
-            let mp = math.add(vp, mid_dp);
+            let mid_dp = mul(this.g.gamma[vi]/whole_l, dp);
+            let mp = add(vp, mid_dp);
 
             //path.push(vp);
             path.push(mp);
@@ -162,15 +160,15 @@ class MeshDraw {
 
         // We really want to push 'center' points as anchor points and
         // real points as control points
-        let dp = math.subtract(last_ep, vp);
+        let dp = sub(last_ep, vp);
 
         // Find center point by linear interpolation; whole way across is
         // |dp| \approx this.g.gamma[vi]+this.g.gamma[ei]
-        let whole_l = math.norm(dp);
+        let whole_l = norm(dp);
 
         // We only want to go this.g.gamma[vi]/|dp| of the way:
-        let mid_dp = math.multiply(this.g.gamma[vi]/whole_l, dp);
-        let mp = math.add(vp, mid_dp);
+        let mid_dp = mul(this.g.gamma[vi]/whole_l, dp);
+        let mp = add(vp, mid_dp);
 
         path.push(mp);
         path.push(vp);
@@ -241,7 +239,7 @@ class Map4v {
 
         if (bdry_face_i === undefined) {
             let sizes = faces.map((f) => { return f.length; }, this);
-            bdry_face_i = sizes.indexOf(math.max(sizes));
+            bdry_face_i = sizes.indexOf(max(sizes));
         }
 
         /* Triangles in the resulting triangulation will always have the form,
@@ -263,7 +261,7 @@ class Map4v {
            + [nv+ne:nv+ne+nf-1] correspond to (nonboundary) faces;
 
            Vertices are canonically indexed 0:nv+ne+nf-1. */
-        let verts = math.range(0, this.nv+this.ne+faces.length-1).toArray();
+        let verts = range(0, this.nv+this.ne+faces.length-1);
 
         // Boundary verts are simply determined by the vertices and edges in the boundary face.
         //console.log(faces);
@@ -406,7 +404,7 @@ class TriangleMesh {
     }
 
     min_valence() {
-        return math.min(this.valences());
+        return min(this.valences());
     }
 
     chi() {
@@ -426,9 +424,9 @@ class DiscreteRiemannMetric {
         this.n = mesh.verts.length;
         this.mesh = mesh;
 
-        this.gamma = radius_map;
+        this.gamma = array2vec(radius_map);
         this.u = this.conf_factor(radius_map);
-        this.l = math.zeros(this.n, this.n, 'sparse');
+        this.l = zeros(this.n, this.n);
 
         this.theta = {};
         this.phi = edge_weights;
@@ -439,28 +437,32 @@ class DiscreteRiemannMetric {
     static from_triangle_mesh(mesh) {
         let n = mesh.verts.length;
         let gamma = mesh.verts.map(function() { return 1; }, this);
-        let phi = math.zeros(n, n, 'sparse');
+        let phi = zeros(n, n);
 
         for (let edge of mesh.edges) {
-            phi.subset(math.index(edge[0], edge[1]), 0);
-            phi.subset(math.index(edge[1], edge[0]), 0);
+            phi.val[edge[0]*phi.n + edge[1]] = 0;
+            phi.val[edge[1]*phi.n + edge[0]] = 0;
         }
 
         return new DiscreteRiemannMetric(mesh, gamma, phi);
     }
 
     conf_factor(gamma) {
-        return math.log(gamma);
+        return log(gamma);
     }
 
     compute_length(edge) {
-        let g = math.subset(this.gamma, math.index(edge));
-        return math.sqrt(2*g[0]*g[1]*math.cos(this.phi.subset(math.index(...edge))) +
-                         g[0]**2 + g[1]**2);
+        // console.log(this.gamma, this.gamma.val);
+        let g0 = this.gamma[edge[0]];
+        let g1 = this.gamma[edge[1]];
+
+        // Law of cosines
+        return sqrt(2*g0*g1*cos(this.phi.val[edge[0]*this.phi.n + edge[1]]) +
+                    g0**2 + g1**2);
     }
 
     length(edge) {
-        return this.l.subset(math.index(...edge));
+        return this.l.val[edge[0]*this.l.n + edge[1]];
     }
 
     abc_for_vert(face, vert) {
@@ -488,19 +490,19 @@ class DiscreteRiemannMetric {
     curvature(vert) {
         let adj_faces = this.mesh.adjacent_faces(vert);
         if (this.mesh.bdyverts.indexOf(vert) >= 0) {
-            return   Math.PI - math.sum(adj_faces.map((face) => {return this.angle(face, vert)}, this));
+            return   Math.PI - sum(adj_faces.map((face) => {return this.angle(face, vert);}, this));
         } else {
-            return 2*Math.PI - math.sum(adj_faces.map((face) => {return this.angle(face, vert)}, this));
+            return 2*Math.PI - sum(adj_faces.map((face) => {return this.angle(face, vert);}, this));
         }
     }
 
     update() {
-        this.gamma = math.exp(this.u);
+        this.gamma = exp(this.u);
 
         for (let edge of this.mesh.edges) {
             let l = this.compute_length(edge);
-            this.l.subset(math.index(edge[0], edge[1]), l);
-            this.l.subset(math.index(edge[1], edge[0]), l);
+            this.l.val[edge[0]*this.l.n + edge[1]] = l;
+            this.l.val[edge[1]*this.l.n + edge[0]] = l;
         }
 
         // Set angles using law of cosines
@@ -513,7 +515,7 @@ class DiscreteRiemannMetric {
         }
 
         // Set curvatures
-        this.K = math.sparse(this.mesh.verts.map(this.curvature, this));
+        this.K = sparse(this.mesh.verts.map(this.curvature, this));
     }
 
     newton(target_K=null, dt=0.05, thresh=1e-4) {
@@ -524,19 +526,19 @@ class DiscreteRiemannMetric {
         let g = new DiscreteRiemannMetric(this.mesh, this.gamma, this.phi);
 
         let K = g.K;
-        let DeltaK = math.subtract(target_K, K);
+        let DeltaK = sub(target_K, K);
 
         let _failsafe = 0;
-        while (math.max(math.abs(DeltaK)) > thresh){
+        while (max(abs(DeltaK)) > thresh){
             let H = this.hessian();
             let deltau = least_squares(H, DeltaK);
 
-            g.u = math.subtract(g.u, math.transpose(math.multiply(dt, deltau)).toArray()[0]);
+            g.u = sub(g.u, mul(dt, deltau));
 
             g.update();
 
             K = g.K;
-            DeltaK = math.subtract(target_K, K);
+            DeltaK = sub(target_K, K);
 
             //console.log(math.max(math.abs(DeltaK)));
 
@@ -559,12 +561,12 @@ class DiscreteRiemannMetric {
         let a = this.length([face[0], face[1]]);
         let b = this.length([face[0], face[2]]);
 
-        return .5*a*b*math.sin(gamma);
+        return .5*a*b*sin(gamma);
     }
 
     hessian() {
         let n = this.mesh.verts.length;
-        let H = math.zeros(n, n, 'sparse');
+        let H = zeros(n, n);
         let t = this.tau2;
 
         for (let face of this.mesh.faces) {
@@ -572,13 +574,13 @@ class DiscreteRiemannMetric {
             let j = face[1];
             let k = face[2];
 
-            let l_k = math.subset(this.l, math.index(i, j));
-            let l_i = math.subset(this.l, math.index(j, k));
-            let l_j = math.subset(this.l, math.index(k, i));
+            let l_k = this.l.val[i*this.l.n + j];
+            let l_i = this.l.val[j*this.l.n + k];
+            let l_j = this.l.val[k*this.l.n + i];
 
-            let g_i = math.subset(this.gamma, math.index(i));
-            let g_j = math.subset(this.gamma, math.index(j));
-            let g_k = math.subset(this.gamma, math.index(k));
+            let g_i = this.gamma[i];
+            let g_j = this.gamma[j];
+            let g_k = this.gamma[k];
 
             let th_i = this.angle(face, i);
             let th_j = this.angle(face, j);
@@ -586,25 +588,24 @@ class DiscreteRiemannMetric {
 
             let A = this.face_area(face);
 
-            let L = math.diag([l_i, l_j, l_k]);
-            let D = math.matrix([[0,                t(l_i, g_j, g_k), t(l_i, g_k, g_j)],
-                                 [t(l_j, g_i, g_k), 0,                t(l_j, g_k, g_i)],
-                                 [t(l_k, g_i, g_j), t(l_k, g_j, g_i), 0               ]]);
+            let L = diag([l_i, l_j, l_k]);
+            let D = array2mat([[0,                t(l_i, g_j, g_k), t(l_i, g_k, g_j)],
+                               [t(l_j, g_i, g_k), 0,                t(l_j, g_k, g_i)],
+                               [t(l_k, g_i, g_j), t(l_k, g_j, g_i), 0               ]]);
 
-            let Theta = math.cos(math.matrix([
+            let Theta = cos(array2mat([
                 [Math.PI, th_k, th_j],
                 [th_k, Math.PI, th_i],
                 [th_j, th_i, Math.PI]
             ]));
 
-            let Tijk = math.multiply(-.5/A, math.multiply(math.multiply(math.multiply(L, Theta), math.inv(L)), D));
+            let Tijk = mul(-.5/A, mul(mul(mul(L, Theta), inv(L)), D));
 
             for (let rowi of [0,1,2]) {
                 let a = [i,j,k][rowi];
                 for (let coli of [0,1,2]) {
                     let b = [i,j,k][coli];
-                    H.subset(math.index(a,b),
-                             math.subset(H, math.index(a,b))+math.subset(Tijk, math.index(rowi, coli)));
+                    H.val[a*H.n + b] += Tijk.val[rowi*Tijk.n + coli];
                 }
             }
         }
@@ -714,12 +715,12 @@ function orient_faces(faces) {
 }
 
 function u_theta(theta) {
-    return [math.cos(theta), math.sin(theta)];
+    return [cos(theta), sin(theta)];
 }
 
 function embed_faces(g) {
     let mesh = g.mesh;
-    let x = math.multiply(-30, math.ones(g.n, 2));
+    let x = mul(-30, ones(g.n, 2));
     let phi = {};
     let pi = Math.PI;
 
@@ -730,12 +731,16 @@ function embed_faces(g) {
     let f_0 = to_embed.pop();
     let i = f_0[0], j = f_0[1], k = f_0[2];
 
-    x.subset(math.index(i, [0, 1]), [0,0]);
-    x.subset(math.index(j, [0, 1]), [g.length([i,j]),0]);
+    x.val[i*x.n + 0] = 0;
+    x.val[i*x.n + 1] = 0;
+    x.val[j*x.n + 0] = g.length([i,j]);
+    x.val[j*x.n + 1] = 0;
 
     let phi_ik = g.angle(f_0, i) % (2*pi);
+    let g_ik = g.length([i,k]);
 
-    x.subset(math.index(k, [0, 1]), math.multiply(g.length([i,k]), u_theta(phi_ik)));
+    x.val[k*x.n + 0] = g_ik*cos(phi_ik);
+    x.val[k*x.n + 1] = g_ik*sin(phi_ik);
 
     let phi_jk = (pi - g.angle(f_0, j)) % (2*pi);
 
@@ -793,9 +798,9 @@ function embed_faces(g) {
         // phi_ik = (phi[[i,j]] - g.angle(F, i)) % (2*pi);
         //}
         if (!([j,k] in phi) && !([i,k] in phi)) {
-            x.subset(math.index(k, [0,1]),
-                     math.add(x.subset(math.index(i, [0,1])).toArray()[0],
-                              math.multiply(g.length([i,k]),u_theta(phi_ik))));
+            g_ik = g.length([i,k]);
+            x.val[k*x.n + 0] = x.val[i*x.n + 0] + g_ik*cos(phi_ik);
+            x.val[k*x.n + 1] = x.val[i*x.n + 1] + g_ik*sin(phi_ik);
         }
 
         //console.log(g.length([i,k]))
@@ -840,6 +845,7 @@ function map_to_mesh(m) {
 let meshDraw = new MeshDraw("#knot-draw");
 
 function drawMap(sigma, cross_bend=8) {
+    var tstart = Date.now();
     meshDraw.clear();
 
     let m4v = new Map4v(sigma);
@@ -854,7 +860,7 @@ function drawMap(sigma, cross_bend=8) {
 
     let cpmetric = DiscreteRiemannMetric.from_triangle_mesh(testMesh);
 
-    let K = math.zeros(testMesh.verts.length, 1);
+    let K = zeros(testMesh.verts.length);
     //K.subset(math.index(testMesh.bdyverts, 0),
     //         testMesh.bdyverts.map(function(b) { return 2*Math.PI/testMesh.bdyverts.length; }));
 
@@ -862,32 +868,29 @@ function drawMap(sigma, cross_bend=8) {
     let bdyCross = testMesh.bdyverts.filter(function(vi) { return vi < m4v.nv; });
     let bdyEdge = testMesh.bdyverts.filter(function(vi) { return (vi >= m4v.nv && vi < m4v.nv+m4v.ne); });
     let fac = 8; // Inverse of how concave crossing vertices should be imbedded
-    K.subset(math.index(bdyCross, 0),
-             bdyCross.map((bci) => { return -Math.PI/fac; }));
-    K.subset(math.index(bdyEdge, 0),
-             bdyEdge.map((bei) => { return (2*Math.PI + bdyCross.length*Math.PI/fac)/bdyEdge.length; }));
+    for (let bci of bdyCross) {
+        K[bci] = -Math.PI/fac;
+    }
+    for (let bei of bdyEdge) {
+        K[bei] = (2*Math.PI + bdyCross.length*Math.PI/fac)/bdyEdge.length;
+    }
 
     let flat_poly = cpmetric.newton(K, 1, 5e-2);
 
     let embedding = embed_faces(flat_poly);
 
     meshDraw.set_embedding(flat_poly, embedding, m4v);
+    console.log("Computation finished in: " + (Date.now() - tstart) + " milliseconds");
 }
 
 // Trefoil
-//let tref = new Map4v([[0, 6, 11, 5], [1, 8, 2, 7], [3, 9, 4, 10]]);
-// 5_1
-//let tref = new Map4v([[0, 10, 19, 9], [1, 12, 2, 11], [3, 13, 4, 14], [5, 16, 6, 15], [7, 17, 8, 18]]);
-// Random 10x
-//let tref = new Map4v([[1, 0, 2, 39], [3, 34, 4, 33], [5, 28, 6, 27], [7, 29, 8, 30], [9, 12, 10, 11], [13, 20, 14, 19], [15, 17, 16, 18], [21, 35, 22, 36], [23, 38, 24, 37], [25, 32, 26, 31]]);
-//[[0, 6, 23, 5], [1, 16, 2, 15], [3, 17, 4, 18], [7, 14, 8, 13], [9, 19, 10, 20], [11, 22, 12, 21]]
-// [[0, 25, 35, 26], [1, 27, 2, 28], [3, 18, 4, 17], [5, 15, 6, 16], [7, 30, 8, 29], [9, 23, 10, 24], [11, 33, 12, 34], [13, 20, 14, 19], [21, 32, 22, 31]]
-//[[1, 52, 2, 51], [0, 54, 59, 53], [3, 10, 4, 9], [5, 47, 6, 48], [7, 50, 8, 49], [11, 33, 12, 34], [13, 32, 14, 31], [15, 58, 16, 57], [17, 55, 18, 56], [19, 46, 20, 45], [21, 39, 22, 40], [23, 42, 24, 41], [25, 43, 26, 44], [27, 38, 28, 37], [29, 35, 30, 36]]
-//[[0, 6, 59, 5], [1, 20, 2, 19], [3, 21, 4, 22], [7, 38, 8, 37], [9, 35, 10, 36], [11, 41, 12, 42], [13, 44, 14, 43], [15, 45, 16, 46], [17, 32, 18, 31], [23, 58, 24, 57], [25, 52, 26, 51], [27, 49, 28, 50], [29, 55, 30, 56], [33, 40, 34, 39], [47, 54, 48, 53]]
-let sigma = [[0, 41, 99, 42], [1, 47, 2, 48], [3, 34, 4, 33], [5, 96, 6, 95], [7, 13, 8, 14], [9, 68, 10, 67], [11, 69, 12, 70], [15, 62, 16, 61], [17, 59, 18, 60], [19, 85, 20, 86], [21, 27, 22, 28], [23, 82, 24, 81], [25, 83, 26, 84], [29, 88, 30, 87], [31, 93, 32, 94], [35, 46, 36, 45], [37, 43, 38, 44], [39, 98, 40, 97], [49, 76, 50, 75], [51, 73, 52, 74], [53, 72, 54, 71], [55, 65, 56, 66], [57, 64, 58, 63], [77, 92, 78, 91], [79, 89, 80, 90]];
-// [[1, 31, 2, 32], [0, 126, 199, 125], [3, 102, 4, 101], [5, 12, 6, 11], [7, 114, 8, 113], [9, 111, 10, 112], [13, 116, 14, 115], [15, 117, 16, 118], [17, 103, 18, 104], [19, 30, 20, 29], [21, 124, 22, 123], [23, 53, 24, 54], [25, 56, 26, 55], [27, 121, 28, 122], [33, 100, 34, 99], [35, 130, 36, 129], [37, 131, 38, 132], [39, 134, 40, 133], [41, 151, 42, 152], [43, 86, 44, 85], [45, 175, 46, 176], [47, 166, 48, 165], [49, 75, 50, 76], [51, 93, 52, 94], [57, 68, 58, 67], [59, 142, 60, 141], [61, 143, 62, 144], [63, 146, 64, 145], [65, 139, 66, 140], [69, 92, 70, 91], [71, 170, 72, 169], [73, 171, 74, 172], [77, 196, 78, 195], [79, 153, 80, 154], [81, 191, 82, 192], [83, 190, 84, 189], [87, 150, 88, 149], [89, 147, 90, 148], [95, 198, 96, 197], [97, 127, 98, 128], [105, 120, 106, 119], [107, 138, 108, 137], [109, 135, 110, 136], [155, 193, 156, 194], [157, 188, 158, 187], [159, 182, 160, 181], [161, 183, 162, 184], [163, 177, 164, 178], [167, 174, 168, 173], [179, 186, 180, 185]]
-//[[1, 287, 2, 288], [0, 289, 299, 290], [3, 126, 4, 125], [5, 16, 6, 15], [7, 13, 8, 14], [9, 255, 10, 256], [11, 254, 12, 253], [17, 127, 18, 128], [19, 282, 20, 281], [21, 132, 22, 131], [23, 277, 24, 278], [25, 235, 26, 236], [27, 222, 28, 221], [29, 223, 30, 224], [31, 38, 32, 37], [33, 228, 34, 227], [35, 225, 36, 226], [39, 230, 40, 229], [41, 156, 42, 155], [43, 157, 44, 158], [45, 164, 46, 163], [47, 165, 48, 166], [49, 56, 50, 55], [51, 198, 52, 197], [53, 195, 54, 196], [57, 243, 58, 244], [59, 242, 60, 241], [61, 231, 62, 232], [63, 234, 64, 233], [65, 248, 66, 247], [67, 249, 68, 250], [69, 276, 70, 275], [71, 133, 72, 134], [73, 83, 74, 84], [75, 82, 76, 81], [77, 283, 78, 284], [79, 286, 80, 285], [85, 295, 86, 296], [87, 294, 88, 293], [89, 291, 90, 292], [91, 298, 92, 297], [93, 136, 94, 135], [95, 109, 96, 110], [97, 108, 98, 107], [99, 122, 100, 121], [101, 259, 102, 260], [103, 262, 104, 261], [105, 119, 106, 120], [111, 273, 112, 274], [113, 272, 114, 271], [115, 265, 116, 266], [117, 264, 118, 263], [123, 137, 124, 138], [129, 280, 130, 279], [139, 257, 140, 258], [141, 268, 142, 267], [143, 269, 144, 270], [145, 252, 146, 251], [147, 237, 148, 238], [149, 216, 150, 215], [151, 217, 152, 218], [153, 220, 154, 219], [159, 210, 160, 209], [161, 211, 162, 212], [167, 190, 168, 189], [169, 187, 170, 188], [171, 205, 172, 206], [173, 200, 174, 199], [175, 201, 176, 202], [177, 204, 178, 203], [179, 186, 180, 185], [181, 191, 182, 192], [183, 194, 184, 193], [207, 214, 208, 213], [239, 245, 240, 246]]
-//[[0, 21, 27, 22], [1, 23, 2, 24], [3, 26, 4, 25], [5, 20, 6, 19], [7, 14, 8, 13], [9, 15, 10, 16], [11, 18, 12, 17]]);
+//let sigma = [[0, 6, 11, 5], [1, 8, 2, 7], [3, 9, 4, 10]];
+
+// More complicated
+//let sigma = [[0, 41, 99, 42], [1, 47, 2, 48], [3, 34, 4, 33], [5, 96, 6, 95], [7, 13, 8, 14], [9, 68, 10, 67], [11, 69, 12, 70], [15, 62, 16, 61], [17, 59, 18, 60], [19, 85, 20, 86], [21, 27, 22, 28], [23, 82, 24, 81], [25, 83, 26, 84], [29, 88, 30, 87], [31, 93, 32, 94], [35, 46, 36, 45], [37, 43, 38, 44], [39, 98, 40, 97], [49, 76, 50, 75], [51, 73, 52, 74], [53, 72, 54, 71], [55, 65, 56, 66], [57, 64, 58, 63], [77, 92, 78, 91], [79, 89, 80, 90]];
+
+// Even moreso
+let sigma = [[1, 287, 2, 288], [0, 289, 299, 290], [3, 126, 4, 125], [5, 16, 6, 15], [7, 13, 8, 14], [9, 255, 10, 256], [11, 254, 12, 253], [17, 127, 18, 128], [19, 282, 20, 281], [21, 132, 22, 131], [23, 277, 24, 278], [25, 235, 26, 236], [27, 222, 28, 221], [29, 223, 30, 224], [31, 38, 32, 37], [33, 228, 34, 227], [35, 225, 36, 226], [39, 230, 40, 229], [41, 156, 42, 155], [43, 157, 44, 158], [45, 164, 46, 163], [47, 165, 48, 166], [49, 56, 50, 55], [51, 198, 52, 197], [53, 195, 54, 196], [57, 243, 58, 244], [59, 242, 60, 241], [61, 231, 62, 232], [63, 234, 64, 233], [65, 248, 66, 247], [67, 249, 68, 250], [69, 276, 70, 275], [71, 133, 72, 134], [73, 83, 74, 84], [75, 82, 76, 81], [77, 283, 78, 284], [79, 286, 80, 285], [85, 295, 86, 296], [87, 294, 88, 293], [89, 291, 90, 292], [91, 298, 92, 297], [93, 136, 94, 135], [95, 109, 96, 110], [97, 108, 98, 107], [99, 122, 100, 121], [101, 259, 102, 260], [103, 262, 104, 261], [105, 119, 106, 120], [111, 273, 112, 274], [113, 272, 114, 271], [115, 265, 116, 266], [117, 264, 118, 263], [123, 137, 124, 138], [129, 280, 130, 279], [139, 257, 140, 258], [141, 268, 142, 267], [143, 269, 144, 270], [145, 252, 146, 251], [147, 237, 148, 238], [149, 216, 150, 215], [151, 217, 152, 218], [153, 220, 154, 219], [159, 210, 160, 209], [161, 211, 162, 212], [167, 190, 168, 189], [169, 187, 170, 188], [171, 205, 172, 206], [173, 200, 174, 199], [175, 201, 176, 202], [177, 204, 178, 203], [179, 186, 180, 185], [181, 191, 182, 192], [183, 194, 184, 193], [207, 214, 208, 213], [239, 245, 240, 246]];
 
 drawMap(sigma);
 
