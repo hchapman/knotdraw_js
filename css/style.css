@@ -27,8 +27,16 @@ body {
 }
 
 .edge {
- stroke: black;
- stroke-width:1px;
+    stroke: blue;
+    stroke-width:.1px;
+    vector-effect: non-scaling-stroke;
+}
+
+.knot {
+    fill: none;
+    stroke: black;
+    stroke-width:1px;
+    vector-effect: non-scaling-stroke;
 }
 
 .drag-node, .drag-node.hover-node {
