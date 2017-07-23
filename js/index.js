@@ -47,8 +47,15 @@ class MeshDraw {
     constructor(div) {
         this.nodes = [];
         this.edges = {};
+        this.pan = svgPanZoom(div, {
+            minZoom: 0.1,
+            maxZoom: 50,
+            fit: false,
+            controlIconsEnabled: true,
+            zoomScaleSensitivity: 1
+        });
 
-        this.draw = Snap(div);
+        this.draw = Snap(document.querySelector(div).children[0]);
         this.edgeG = this.draw.g();
         this.nodeG = this.draw.g();
         this.knotG = this.draw.g();
@@ -424,6 +431,8 @@ class DiscreteRiemannMetric {
         this.n = mesh.verts.length;
         this.mesh = mesh;
 
+        this.lab = new Lalolab();
+
         this.gamma = array2vec(radius_map);
         this.u = this.conf_factor(radius_map);
         this.l = zeros(this.n, this.n);
@@ -551,6 +560,42 @@ class DiscreteRiemannMetric {
 
         return g;
     }
+
+    newton_async(f, target_K=null, dt=0.05, thresh=1e-4) {
+        /* Asynchronous; passes resultant g to function f */
+        if (target_K == null) {
+
+        }
+
+        let g = new DiscreteRiemannMetric(this.mesh, this.gamma, this.phi);
+
+        let K = g.K;
+        let DeltaK = sub(target_K, K);
+
+        let _failsafe = 0;
+        while (max(abs(DeltaK)) > thresh){
+            let H = this.hessian();
+            let deltau = least_squares(H, DeltaK);
+
+            g.u = sub(g.u, mul(dt, deltau));
+
+            g.update();
+
+            K = g.K;
+            DeltaK = sub(target_K, K);
+
+            //console.log(math.max(math.abs(DeltaK)));
+
+            _failsafe += 1;
+            if (_failsafe > 1000) {
+                console.log("Took too long to flatten; abort!");
+                return g;
+            }
+        }
+
+        return g;
+    }
+
 
     tau2(l_jk, g_j, g_k) {
         return .5*(l_jk**2 + g_j**2 - g_k**2);
