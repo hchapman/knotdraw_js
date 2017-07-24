@@ -32,11 +32,19 @@ body {
     vector-effect: non-scaling-stroke;
 }
 
+.face {
+    fill: green;
+}
+
 .knot {
     fill: none;
     stroke: black;
-    stroke-width:1px;
+    stroke-width:3px;
     vector-effect: non-scaling-stroke;
+}
+
+.knot:hover {
+    stroke: teal;
 }
 
 .drag-node, .drag-node.hover-node {
