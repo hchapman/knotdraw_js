@@ -1,0 +1,11 @@
+{
+  "name": "knotflow-js",
+  "version": "0.0.1",
+  "scripts": {
+    "build": "babel src -d js"
+  },
+  "devDependencies": {
+    "babel-cli": "^6.0.0",
+    "babel-preset-env": "^1.6.0"
+  }
+}
