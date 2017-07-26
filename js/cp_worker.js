@@ -9,7 +9,7 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
 importScripts('lalolib/lalolib.js');
 
 function least_squares(X /* : Matrix */, Y /* : Matrix */) /* : least_squares */{
-    console.log("X", X, inv(X), det(X), Y);
+    //console.log("X", X, inv(X), det(X), Y);
     var betaHat = solve(mul(X, transpose(X)), mul(X, Y));
 
     return betaHat;
@@ -233,8 +233,9 @@ var LinkShadow = function () {
                         var _arc = _step3.value;
 
                         // Add scaffolding for this arc
-                        var pre_arc = this.verts[_arc.vert][(_arc.vert + 3) % 4];
+                        var pre_arc = this.verts[_arc.vert][(_arc.vertpos + 3) % 4];
                         console.log("!!", _arc, tri_map.edges[_arc.edge], tri_map.arcs[_arc.index]);
+                        console.log(pre_arc);
                         edges.push([tri_map.arcs[_arc.index][0], tri_map.arcs[pre_arc.index][0]]);
 
                         triangles.push([tri_map.arcs[_arc.index][0], tri_map.arcs[pre_arc.index][0], tri_map.verts[_arc.vert]]);
@@ -242,7 +243,7 @@ var LinkShadow = function () {
                         // Add scaffolding for opposite arc
                         var o_arc = this.verts[_arc.vert][(_arc.vertpos + 2) % 4];
                         console.log("~~", o_arc);
-                        pre_arc = this.verts[o_arc.vert][(o_arc.vert + 1) % 4];
+                        pre_arc = this.verts[o_arc.vert][(o_arc.vertpos + 3) % 4];
                         edges.push([tri_map.arcs[o_arc.index][0], tri_map.arcs[pre_arc.index][0]]);
 
                         triangles.push([tri_map.arcs[o_arc.index][0], tri_map.arcs[pre_arc.index][0], tri_map.verts[o_arc.vert]]);
@@ -1211,6 +1212,9 @@ function embed_faces(g) {
 
             embed_queue.add(adj_pair);
         }
+
+        //console.log("toEmbed:", to_embed);
+        //console.log(mesh.faces);
     } catch (err) {
         _didIteratorError18 = true;
         _iteratorError18 = err;
@@ -1320,6 +1324,7 @@ function embed_faces(g) {
         }
     }
 
+    //console.log("toEmbed:", to_embed);
     return [x, faces, phi];
 }
 
@@ -1338,32 +1343,35 @@ onmessage = function onmessage(e) {
 
     var testMesh = new TriangleMesh(triangulation[0], triangulation[1], triangulation[2], triangulation[3]);
 
-    console.log(testMesh);
+    //console.log(testMesh);
 
     var cpmetric = DiscreteRiemannMetric.from_triangle_mesh(testMesh);
 
     var K = zeros(testMesh.verts.length, 1);
+    //for (let bi of testMesh.bdyverts) {
+    //    K[bi] = 2*Math.PI/testMesh.bdyverts.length;
+    //}
+    console.log(K);
+
+    // Set boundary crossing target curvature
+    var bdyCross = testMesh.bdyverts.filter(function (vi) {
+        return triangulation[4].verts.includes(vi);
+    });
+    var bdyEdge = testMesh.bdyverts.filter(function (vi) {
+        return !triangulation[4].verts.includes(vi);
+    });
+    console.log(bdyCross, bdyEdge);
+    var fac = 16; // Inverse of how concave crossing vertices should be imbedded
     var _iteratorNormalCompletion20 = true;
     var _didIteratorError20 = false;
     var _iteratorError20 = undefined;
 
     try {
-        for (var _iterator20 = testMesh.bdyverts[Symbol.iterator](), _step20; !(_iteratorNormalCompletion20 = (_step20 = _iterator20.next()).done); _iteratorNormalCompletion20 = true) {
-            var bi = _step20.value;
+        for (var _iterator20 = bdyCross[Symbol.iterator](), _step20; !(_iteratorNormalCompletion20 = (_step20 = _iterator20.next()).done); _iteratorNormalCompletion20 = true) {
+            var bci = _step20.value;
 
-            K[bi] = 2 * Math.PI / testMesh.bdyverts.length;
+            K[bci] = -Math.PI / fac;
         }
-
-        // Set boundary crossing target curvature
-        //let bdyCross = testMesh.bdyverts.filter(vi => triangulation[4].verts.includes(vi));
-        //let bdyEdge = testMesh.bdyverts.filter(vi => !triangulation[4].verts.includes(vi));
-        //let fac = 8; // Inverse of how concave crossing vertices should be imbedded
-        //for (let bci of bdyCross) {
-        //    K[bci] = -Math.PI/fac;
-        //}
-        //for (let bei of bdyEdge) {
-        //    K[bei] = (2*Math.PI + bdyCross.length*Math.PI/fac)/bdyEdge.length;
-        //}
     } catch (err) {
         _didIteratorError20 = true;
         _iteratorError20 = err;
@@ -1379,15 +1387,40 @@ onmessage = function onmessage(e) {
         }
     }
 
+    var _iteratorNormalCompletion21 = true;
+    var _didIteratorError21 = false;
+    var _iteratorError21 = undefined;
+
+    try {
+        for (var _iterator21 = bdyEdge[Symbol.iterator](), _step21; !(_iteratorNormalCompletion21 = (_step21 = _iterator21.next()).done); _iteratorNormalCompletion21 = true) {
+            var bei = _step21.value;
+
+            K[bei] = (2 * Math.PI + bdyCross.length * Math.PI / fac) / bdyEdge.length;
+        }
+    } catch (err) {
+        _didIteratorError21 = true;
+        _iteratorError21 = err;
+    } finally {
+        try {
+            if (!_iteratorNormalCompletion21 && _iterator21.return) {
+                _iterator21.return();
+            }
+        } finally {
+            if (_didIteratorError21) {
+                throw _iteratorError21;
+            }
+        }
+    }
+
     console.log(K);
 
-    var flat_poly = cpmetric.newton(K, 1, 1e-2);
+    var flat_poly = cpmetric.newton(K, 1, 5e-2);
 
-    console.log(flat_poly);
+    //console.log(flat_poly);
 
     var embedding = embed_faces(flat_poly);
 
-    console.log(embedding);
+    //console.log(embedding);
 
     postMessage({
         flat_poly: flat_poly,

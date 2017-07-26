@@ -1,7 +1,7 @@
 importScripts('lalolib/lalolib.js');
 
 function least_squares(X /* : Matrix */, Y /* : Matrix */) /* : least_squares */ {
-    console.log("X", X, inv(X), det(X), Y);
+    //console.log("X", X, inv(X), det(X), Y);
     let betaHat = solve(mul(X, transpose(X)), mul(X, Y));
 
     return betaHat;
@@ -145,8 +145,9 @@ class LinkShadow {
             // add scaffolding for any isthmi, if there are any.
             for (let arc of isthmus_arcs) {
                 // Add scaffolding for this arc
-                let pre_arc = this.verts[arc.vert][(arc.vert+3)%4];
+                let pre_arc = this.verts[arc.vert][(arc.vertpos+3)%4];
                 console.log("!!", arc, tri_map.edges[arc.edge], tri_map.arcs[arc.index]);
+                console.log(pre_arc);
                 edges.push([tri_map.arcs[arc.index][0],
                             tri_map.arcs[pre_arc.index][0]]);
 
@@ -157,7 +158,7 @@ class LinkShadow {
                 // Add scaffolding for opposite arc
                 let o_arc = this.verts[arc.vert][(arc.vertpos+2)%4];
                 console.log("~~", o_arc);
-                pre_arc = this.verts[o_arc.vert][(o_arc.vert+1)%4];
+                pre_arc = this.verts[o_arc.vert][(o_arc.vertpos+3)%4];
                 edges.push([tri_map.arcs[o_arc.index][0],
                             tri_map.arcs[pre_arc.index][0]]);
 
@@ -762,6 +763,9 @@ function embed_faces(g) {
         embed_queue.add(adj_pair);
     }
 
+    //console.log("toEmbed:", to_embed);
+    //console.log(mesh.faces);
+
     let _failsafe = 0;
     while (to_embed.length > 0) {
         let adj_pair = Array.from(embed_queue).pop();
@@ -834,6 +838,7 @@ function embed_faces(g) {
 
     }
 
+    //console.log("toEmbed:", to_embed);
     return [x, faces, phi];
 }
 
@@ -854,34 +859,36 @@ onmessage = function(e) {
         triangulation[0], triangulation[1], triangulation[2], triangulation[3]
     );
 
-    console.log(testMesh);
+    //console.log(testMesh);
 
     let cpmetric = DiscreteRiemannMetric.from_triangle_mesh(testMesh);
 
     let K = zeros(testMesh.verts.length, 1);
-    for (let bi of testMesh.bdyverts) {
-        K[bi] = 2*Math.PI/testMesh.bdyverts.length;
-    }
-
-    // Set boundary crossing target curvature
-    //let bdyCross = testMesh.bdyverts.filter(vi => triangulation[4].verts.includes(vi));
-    //let bdyEdge = testMesh.bdyverts.filter(vi => !triangulation[4].verts.includes(vi));
-    //let fac = 8; // Inverse of how concave crossing vertices should be imbedded
-    //for (let bci of bdyCross) {
-    //    K[bci] = -Math.PI/fac;
-    //}
-    //for (let bei of bdyEdge) {
-    //    K[bei] = (2*Math.PI + bdyCross.length*Math.PI/fac)/bdyEdge.length;
+    //for (let bi of testMesh.bdyverts) {
+    //    K[bi] = 2*Math.PI/testMesh.bdyverts.length;
     //}
     console.log(K);
 
-    let flat_poly = cpmetric.newton(K, 1, 1e-2);
+    // Set boundary crossing target curvature
+    let bdyCross = testMesh.bdyverts.filter(vi => triangulation[4].verts.includes(vi));
+    let bdyEdge = testMesh.bdyverts.filter(vi => !triangulation[4].verts.includes(vi));
+    console.log(bdyCross, bdyEdge);
+    let fac = 16; // Inverse of how concave crossing vertices should be imbedded
+    for (let bci of bdyCross) {
+       K[bci] = -Math.PI/fac;
+    }
+    for (let bei of bdyEdge) {
+       K[bei] = (2*Math.PI + bdyCross.length*Math.PI/fac)/bdyEdge.length;
+    }
+    console.log(K);
 
-    console.log(flat_poly);
+    let flat_poly = cpmetric.newton(K, 1, 5e-2);
+
+    //console.log(flat_poly);
 
     let embedding = embed_faces(flat_poly);
 
-    console.log(embedding);
+    //console.log(embedding);
 
     postMessage({
         flat_poly: flat_poly,
