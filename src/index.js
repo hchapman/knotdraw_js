@@ -82,7 +82,7 @@ class MeshDraw {
         this.knotG.clear();
     }
 
-    set_embedding(g /*metric*/, embedding, map4v /*original map*/) {
+    set_embedding(g /*metric*/, embedding, map4v /*original map*/, conv) {
         let points = embedding[0];
         let faces = embedding[1];
         let phi = embedding[2];
@@ -110,12 +110,12 @@ class MeshDraw {
             node.set_r(this.g.gamma[this.nodes.length-1]);
         }
 
-        for (let edge of this.g.mesh.edges) {
-            if (edge[0] in this.nodes && edge[1] in this.nodes) {
-                let mesh_edge = this.add_edge(edge[0], edge[1]);
-
-                if (Math.max(...edge) < map4v.nv+map4v.ne) {
-                    // This edge has no face connection, and so is not scaffolding
+        for (let comp of conv.comps) {
+            for (let pi = 0; pi < comp.length; pi++) {
+                let edge = [comp[pi], comp[(pi+1)%comp.length]];
+                console.log(edge);
+                if (edge[0] in this.nodes && edge[1] in this.nodes) {
+                    let mesh_edge = this.add_edge(edge[0], edge[1]);
                     mesh_edge.svg.addClass('edge');
                 }
             }
@@ -124,14 +124,14 @@ class MeshDraw {
         //console.log(this.map4v.faces);
         for (let fi in this.map4v.faces) {
             //console.log(fi);
-            let mesh_face = this.add_face(parseInt(fi));
+            //let mesh_face = this.add_face(parseInt(fi));
         }
 
         let ci = 0;
         for (let component of map4v.components) {
-            let knot = this.add_component(component, map4v, points);
-            knot.addClass('q'+ci+"-9");
-            ci += 1;
+            //let knot = this.add_component(component, map4v, points);
+            //knot.addClass('q'+ci+"-9");
+            //ci += 1;
         }
     }
 
@@ -269,17 +269,20 @@ function drawMapAsync(sigma, cross_bend=8) {
 cpWorker.onmessage = function(ev) {
     //console.log(ev.data.m4v);
     meshDraw.clear();
-    meshDraw.set_embedding(ev.data.flat_poly, ev.data.embedding, ev.data.m4v);
+    meshDraw.set_embedding(ev.data.flat_poly, ev.data.embedding, ev.data.m4v, ev.data.conv);
 }
 
 // Trefoil
 //let sigma = [[0, 6, 11, 5], [1, 8, 2, 7], [3, 9, 4, 10]];
 
+// Twist
+//let sigma = [[0, 1, 3, 2]];
+
 // Monogon in internal face
-// let sigma = [[1, 8, 2, 7], [0, 14, 15, 13], [3, 9, 4, 10], [5, 12, 6, 11]];
+let sigma = [[1, 8, 2, 7], [0, 14, 15, 13], [3, 9, 4, 10], [5, 12, 6, 11]];
 
 // More complicated
-let sigma = [[0, 41, 99, 42], [1, 47, 2, 48], [3, 34, 4, 33], [5, 96, 6, 95], [7, 13, 8, 14], [9, 68, 10, 67], [11, 69, 12, 70], [15, 62, 16, 61], [17, 59, 18, 60], [19, 85, 20, 86], [21, 27, 22, 28], [23, 82, 24, 81], [25, 83, 26, 84], [29, 88, 30, 87], [31, 93, 32, 94], [35, 46, 36, 45], [37, 43, 38, 44], [39, 98, 40, 97], [49, 76, 50, 75], [51, 73, 52, 74], [53, 72, 54, 71], [55, 65, 56, 66], [57, 64, 58, 63], [77, 92, 78, 91], [79, 89, 80, 90]];
+//let sigma = [[0, 41, 99, 42], [1, 47, 2, 48], [3, 34, 4, 33], [5, 96, 6, 95], [7, 13, 8, 14], [9, 68, 10, 67], [11, 69, 12, 70], [15, 62, 16, 61], [17, 59, 18, 60], [19, 85, 20, 86], [21, 27, 22, 28], [23, 82, 24, 81], [25, 83, 26, 84], [29, 88, 30, 87], [31, 93, 32, 94], [35, 46, 36, 45], [37, 43, 38, 44], [39, 98, 40, 97], [49, 76, 50, 75], [51, 73, 52, 74], [53, 72, 54, 71], [55, 65, 56, 66], [57, 64, 58, 63], [77, 92, 78, 91], [79, 89, 80, 90]];
 
 // Even moreso
 //let sigma = [[1, 287, 2, 288], [0, 289, 299, 290], [3, 126, 4, 125], [5, 16, 6, 15], [7, 13, 8, 14], [9, 255, 10, 256], [11, 254, 12, 253], [17, 127, 18, 128], [19, 282, 20, 281], [21, 132, 22, 131], [23, 277, 24, 278], [25, 235, 26, 236], [27, 222, 28, 221], [29, 223, 30, 224], [31, 38, 32, 37], [33, 228, 34, 227], [35, 225, 36, 226], [39, 230, 40, 229], [41, 156, 42, 155], [43, 157, 44, 158], [45, 164, 46, 163], [47, 165, 48, 166], [49, 56, 50, 55], [51, 198, 52, 197], [53, 195, 54, 196], [57, 243, 58, 244], [59, 242, 60, 241], [61, 231, 62, 232], [63, 234, 64, 233], [65, 248, 66, 247], [67, 249, 68, 250], [69, 276, 70, 275], [71, 133, 72, 134], [73, 83, 74, 84], [75, 82, 76, 81], [77, 283, 78, 284], [79, 286, 80, 285], [85, 295, 86, 296], [87, 294, 88, 293], [89, 291, 90, 292], [91, 298, 92, 297], [93, 136, 94, 135], [95, 109, 96, 110], [97, 108, 98, 107], [99, 122, 100, 121], [101, 259, 102, 260], [103, 262, 104, 261], [105, 119, 106, 120], [111, 273, 112, 274], [113, 272, 114, 271], [115, 265, 116, 266], [117, 264, 118, 263], [123, 137, 124, 138], [129, 280, 130, 279], [139, 257, 140, 258], [141, 268, 142, 267], [143, 269, 144, 270], [145, 252, 146, 251], [147, 237, 148, 238], [149, 216, 150, 215], [151, 217, 152, 218], [153, 220, 154, 219], [159, 210, 160, 209], [161, 211, 162, 212], [167, 190, 168, 189], [169, 187, 170, 188], [171, 205, 172, 206], [173, 200, 174, 199], [175, 201, 176, 202], [177, 204, 178, 203], [179, 186, 180, 185], [181, 191, 182, 192], [183, 194, 184, 193], [207, 214, 208, 213], [239, 245, 240, 246]];

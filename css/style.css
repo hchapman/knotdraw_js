@@ -47,6 +47,7 @@ body {
     vector-effect: non-scaling-stroke;
 }
 
+
 .knot:hover {
     stroke: teal;
 }

@@ -2,7 +2,8 @@
   "name": "knotflow-js",
   "version": "0.0.1",
   "scripts": {
-    "build": "babel src -d js"
+    "build": "babel src -d js --source-maps",
+    "watch": "babel src -d js --source-maps -w"
   },
   "devDependencies": {
     "babel-cli": "^6.0.0",

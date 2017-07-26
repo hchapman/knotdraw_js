@@ -1362,3 +1362,4 @@ document.getElementById("map_submit").onclick = function (ev) {
         console.log("Error:", err);
     }
 };
+//# sourceMappingURL=index_mathjs.js.map

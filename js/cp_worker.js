@@ -2,19 +2,22 @@
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
+function _toConsumableArray(arr) { if (Array.isArray(arr)) { for (var i = 0, arr2 = Array(arr.length); i < arr.length; i++) { arr2[i] = arr[i]; } return arr2; } else { return Array.from(arr); } }
+
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
 importScripts('lalolib/lalolib.js');
 
 function least_squares(X /* : Matrix */, Y /* : Matrix */) /* : least_squares */{
+    console.log("X", X, inv(X), det(X), Y);
     var betaHat = solve(mul(X, transpose(X)), mul(X, Y));
 
     return betaHat;
 }
 
-var Map4v = function () {
-    function Map4v(verts) {
-        _classCallCheck(this, Map4v);
+var LinkShadow = function () {
+    function LinkShadow(verts) {
+        _classCallCheck(this, LinkShadow);
 
         this.nv = verts.length;
         this.ne = this.nv * 2;
@@ -43,9 +46,288 @@ var Map4v = function () {
         this.generate_components();
     }
 
-    _createClass(Map4v, [{
+    _createClass(LinkShadow, [{
         key: "triangulate",
         value: function triangulate() {
+            var bdry_face_i = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : undefined;
+
+            if (bdry_face_i === undefined) {
+                var sizes = this.faces.map(function (f) {
+                    return f.length;
+                });
+                bdry_face_i = sizes.indexOf(max(sizes));
+            }
+
+            /* Allowing for triangulations of maps with isthmi require that some
+             * triangles are not necessarily of the form f,e,v and for some edges
+             * (i.e. monogon edges) to have multiple triangulation vertices in order
+             * to avoid singular flat embeddings.
+             *
+             * This also complicates the old idea that arcs mapped injectively into
+             * triangulation edges---so it might be easiest to keep a new data
+             * structure with component mappings instead.
+             */
+
+            var triangles = [];
+
+            // We will now build the array of triangulation verts dynamically;
+            // furthermore we will make them data objects which hold references to
+            // appropriate objects
+            var verts = [];
+
+            // We will build edges of the triangulation as we process, too.
+            var edges = [];
+
+            // We will now calculate boundary vertices later; external faces with,
+            // say, isthmi will require scaffolding which makes some vertices which
+            // used to be boundary vertices internal.
+            var bdy_face = this.faces[bdry_face_i];
+            var bdy_verts = void 0;
+
+            /* Since we want to be mindful of the paths---the components---when we
+             * draw the diagram, we will create the triangulation as follows: We
+             * will first run through each component, creating verts and edges as we
+             * go. We will then consider faces (and the boundary face). */
+            var tri_map = {
+                verts: [],
+                edges: [],
+                faces: [],
+                comps: [],
+                arcs: []
+            };
+
+            var _iteratorNormalCompletion = true;
+            var _didIteratorError = false;
+            var _iteratorError = undefined;
+
+            try {
+                for (var _iterator = this.components[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) {
+                    var component = _step.value;
+
+                    var tri_comp = [];
+                    var _iteratorNormalCompletion5 = true;
+                    var _didIteratorError5 = false;
+                    var _iteratorError5 = undefined;
+
+                    try {
+                        for (var _iterator5 = component[Symbol.iterator](), _step5; !(_iteratorNormalCompletion5 = (_step5 = _iterator5.next()).done); _iteratorNormalCompletion5 = true) {
+                            var _arc3 = _step5.value;
+
+                            // Add a new vert for the out_vert of this arc, unless we've already
+                            // hit this vertex before.
+                            if (tri_map.verts[this.out_vert_i(_arc3)] === undefined) {
+                                tri_map.verts[this.out_vert_i(_arc3)] = verts.length;
+                                verts.push(verts.length);
+                            }
+                            // Regardless, add this vert to the component
+                            tri_comp.push(tri_map.verts[this.out_vert_i(_arc3)]);
+
+                            // Add a new vert for the edge of this arc
+                            tri_map.edges[_arc3.edge] = [verts.length];
+                            tri_comp.push(verts.length);
+                            verts.push(verts.length);
+
+                            if (this.out_vert_i(_arc3) == this.in_vert_i(_arc3)) {
+                                // This arc corresponds to a monogon, and so we must add two
+                                // edge vertices rather than one
+                                tri_map.edges[_arc3.edge].push(verts.length);
+                                tri_comp.push(verts.length);
+                                verts.push(verts.length);
+                            }
+
+                            // Add this edge to tri_map.arcs, which contains direction information
+                            tri_map.arcs[_arc3.index] = tri_map.edges[_arc3.edge];
+                            tri_map.arcs[this.edges[_arc3.edge][(_arc3.edgepos + 1) % 2].index] = tri_map.edges[_arc3.edge].slice().reverse();
+                        }
+
+                        // Push this component on
+                    } catch (err) {
+                        _didIteratorError5 = true;
+                        _iteratorError5 = err;
+                    } finally {
+                        try {
+                            if (!_iteratorNormalCompletion5 && _iterator5.return) {
+                                _iterator5.return();
+                            }
+                        } finally {
+                            if (_didIteratorError5) {
+                                throw _iteratorError5;
+                            }
+                        }
+                    }
+
+                    tri_map.comps.push(tri_comp);
+
+                    // Add triangulation edges for this component
+                    for (var cvi = 0; cvi < tri_comp.length - 1; cvi++) {
+                        edges.push([tri_comp[cvi], tri_comp[cvi + 1]]);
+                    }
+                    edges.push([tri_comp[tri_comp.length - 1], tri_comp[0]]);
+                }
+
+                // Every vertex now has a corresponding tri vertex
+                // Every edge now has a corresponding tri vertex (or two)
+                // We must now go through and process the faces.
+            } catch (err) {
+                _didIteratorError = true;
+                _iteratorError = err;
+            } finally {
+                try {
+                    if (!_iteratorNormalCompletion && _iterator.return) {
+                        _iterator.return();
+                    }
+                } finally {
+                    if (_didIteratorError) {
+                        throw _iteratorError;
+                    }
+                }
+            }
+
+            for (var fi in this.faces) {
+                // Regardless, we must identify what isthmi this face has
+                // isthmus_arcs will contain one arc for each vertex---the other arc
+                // will necessarily be vertex-opposite.
+                var isthmus_arcs = [];
+                var isthmus_vert = [];
+
+                var _seen_vi = [];
+                var _iteratorNormalCompletion2 = true;
+                var _didIteratorError2 = false;
+                var _iteratorError2 = undefined;
+
+                try {
+                    for (var _iterator2 = this.faces[fi][Symbol.iterator](), _step2; !(_iteratorNormalCompletion2 = (_step2 = _iterator2.next()).done); _iteratorNormalCompletion2 = true) {
+                        var arc = _step2.value;
+
+                        if (_seen_vi.includes(arc.vert)) {
+                            isthmus_arcs.push(arc);
+                            isthmus_vert.push(arc.vert);
+                        } else {
+                            _seen_vi.push(arc.vert);
+                        }
+                    }
+
+                    // Independent of whether this face is a boundary face, we must
+                    // add scaffolding for any isthmi, if there are any.
+                } catch (err) {
+                    _didIteratorError2 = true;
+                    _iteratorError2 = err;
+                } finally {
+                    try {
+                        if (!_iteratorNormalCompletion2 && _iterator2.return) {
+                            _iterator2.return();
+                        }
+                    } finally {
+                        if (_didIteratorError2) {
+                            throw _iteratorError2;
+                        }
+                    }
+                }
+
+                var _iteratorNormalCompletion3 = true;
+                var _didIteratorError3 = false;
+                var _iteratorError3 = undefined;
+
+                try {
+                    for (var _iterator3 = isthmus_arcs[Symbol.iterator](), _step3; !(_iteratorNormalCompletion3 = (_step3 = _iterator3.next()).done); _iteratorNormalCompletion3 = true) {
+                        var _arc = _step3.value;
+
+                        // Add scaffolding for this arc
+                        var pre_arc = this.verts[_arc.vert][(_arc.vert + 3) % 4];
+                        console.log("!!", _arc, tri_map.edges[_arc.edge], tri_map.arcs[_arc.index]);
+                        edges.push([tri_map.arcs[_arc.index][0], tri_map.arcs[pre_arc.index][0]]);
+
+                        triangles.push([tri_map.arcs[_arc.index][0], tri_map.arcs[pre_arc.index][0], tri_map.verts[_arc.vert]]);
+
+                        // Add scaffolding for opposite arc
+                        var o_arc = this.verts[_arc.vert][(_arc.vertpos + 2) % 4];
+                        console.log("~~", o_arc);
+                        pre_arc = this.verts[o_arc.vert][(o_arc.vert + 1) % 4];
+                        edges.push([tri_map.arcs[o_arc.index][0], tri_map.arcs[pre_arc.index][0]]);
+
+                        triangles.push([tri_map.arcs[o_arc.index][0], tri_map.arcs[pre_arc.index][0], tri_map.verts[o_arc.vert]]);
+                    }
+
+                    // Finally, get a list of tri verts around this face.
+                } catch (err) {
+                    _didIteratorError3 = true;
+                    _iteratorError3 = err;
+                } finally {
+                    try {
+                        if (!_iteratorNormalCompletion3 && _iterator3.return) {
+                            _iterator3.return();
+                        }
+                    } finally {
+                        if (_didIteratorError3) {
+                            throw _iteratorError3;
+                        }
+                    }
+                }
+
+                var tri_face = [];
+                var _iteratorNormalCompletion4 = true;
+                var _didIteratorError4 = false;
+                var _iteratorError4 = undefined;
+
+                try {
+                    for (var _iterator4 = this.faces[fi][Symbol.iterator](), _step4; !(_iteratorNormalCompletion4 = (_step4 = _iterator4.next()).done); _iteratorNormalCompletion4 = true) {
+                        var _arc2 = _step4.value;
+
+                        if (!isthmus_vert.includes(_arc2.vert)) {
+                            // If this vertex is not an isthmus, then it'll be in the
+                            // face
+                            tri_face.push(tri_map.verts[_arc2.vert]);
+                        }
+
+                        // This arcs triangulation vertices need to be added, too
+                        tri_face.splice.apply(tri_face, [tri_face.length, 0].concat(_toConsumableArray(tri_map.arcs[_arc2.index])));
+                    }
+                } catch (err) {
+                    _didIteratorError4 = true;
+                    _iteratorError4 = err;
+                } finally {
+                    try {
+                        if (!_iteratorNormalCompletion4 && _iterator4.return) {
+                            _iterator4.return();
+                        }
+                    } finally {
+                        if (_didIteratorError4) {
+                            throw _iteratorError4;
+                        }
+                    }
+                }
+
+                console.log(tri_face);
+
+                if (fi == bdry_face_i) {
+                    // This face is the boundary face and must be processed
+                    tri_map.faces[fi] = [];
+                    bdy_verts = tri_face;
+                } else {
+                    // This face is an internal face. As we triangulate, each face
+                    // has precisely one vertex, although through R-moves it is
+                    // possible that faces will ultimately consist of several
+                    // vertices.
+                    tri_map.faces[fi] = [verts.length];
+
+                    // For each vertex in this face we add an edge, and a face
+                    edges.push([verts.length, tri_face[0]]);
+                    for (var vi = 1; vi < tri_face.length; vi++) {
+                        edges.push([verts.length, tri_face[vi]]);
+                        triangles.push([verts.length, tri_face[vi - 1], tri_face[vi]]);
+                    }
+                    triangles.push([verts.length, tri_face[tri_face.length - 1], tri_face[0]]);
+
+                    // Finally, add this vertex to verts
+                    verts.push(verts.length);
+                }
+            }
+
+            return [verts, bdy_verts, edges, triangles, tri_map];
+        }
+    }, {
+        key: "old_triangulate",
+        value: function old_triangulate() {
             var _this = this;
 
             var bdry_face_i = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : undefined;
@@ -99,13 +381,13 @@ var Map4v = function () {
                 var face = faces[fi];
                 var fvi = this.nv + this.ne + parseInt(fi);
                 // This face vertex has already been produced (nv+ne+fi)
-                var _iteratorNormalCompletion = true;
-                var _didIteratorError = false;
-                var _iteratorError = undefined;
+                var _iteratorNormalCompletion6 = true;
+                var _didIteratorError6 = false;
+                var _iteratorError6 = undefined;
 
                 try {
-                    for (var _iterator = face[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) {
-                        var arc = _step.value;
+                    for (var _iterator6 = face[Symbol.iterator](), _step6; !(_iteratorNormalCompletion6 = (_step6 = _iterator6.next()).done); _iteratorNormalCompletion6 = true) {
+                        var arc = _step6.value;
 
                         // We get a scaffolding edge face->arc.edge
                         edges.push([fvi, this.nv + arc.edge]);
@@ -119,16 +401,16 @@ var Map4v = function () {
                         triangles.push([fvi, this.nv + o_arc.edge, o_arc.vert]);
                     }
                 } catch (err) {
-                    _didIteratorError = true;
-                    _iteratorError = err;
+                    _didIteratorError6 = true;
+                    _iteratorError6 = err;
                 } finally {
                     try {
-                        if (!_iteratorNormalCompletion && _iterator.return) {
-                            _iterator.return();
+                        if (!_iteratorNormalCompletion6 && _iterator6.return) {
+                            _iterator6.return();
                         }
                     } finally {
-                        if (_didIteratorError) {
-                            throw _iteratorError;
+                        if (_didIteratorError6) {
+                            throw _iteratorError6;
                         }
                     }
                 }
@@ -140,7 +422,7 @@ var Map4v = function () {
         key: "generate_faces",
         value: function generate_faces() {
             var left_arcs = new Set(this.arcs);
-            var faces = [];
+            this.faces = [];
 
             while (left_arcs.size > 0) {
                 var start_arc = Array.from(left_arcs).pop();
@@ -159,15 +441,14 @@ var Map4v = function () {
                     _failsafe += 1;
                     if (_failsafe > 500) {
                         console.log("Failure");
-                        return faces;
+                        return this.faces;
                     }
                 } while (arc != start_arc);
 
-                face.reverse();
-                faces.push(face);
+                //face.reverse();
+                this.faces.push(face);
             }
-
-            this.faces = faces;
+            return this.faces;
         }
     }, {
         key: "generate_components",
@@ -176,18 +457,18 @@ var Map4v = function () {
 
             var left_arcs = new Set(this.arcs);
 
-            var components = [];
+            this.components = [];
             while (left_arcs.size > 0) {
                 var start_arc = Array.from(left_arcs).pop();
 
                 var component = this.component(start_arc);
-                var _iteratorNormalCompletion2 = true;
-                var _didIteratorError2 = false;
-                var _iteratorError2 = undefined;
+                var _iteratorNormalCompletion7 = true;
+                var _didIteratorError7 = false;
+                var _iteratorError7 = undefined;
 
                 try {
-                    for (var _iterator2 = component[Symbol.iterator](), _step2; !(_iteratorNormalCompletion2 = (_step2 = _iterator2.next()).done); _iteratorNormalCompletion2 = true) {
-                        var arc = _step2.value;
+                    for (var _iterator7 = component[Symbol.iterator](), _step7; !(_iteratorNormalCompletion7 = (_step7 = _iterator7.next()).done); _iteratorNormalCompletion7 = true) {
+                        var arc = _step7.value;
 
                         left_arcs.delete(arc);
                         if (one_orient) {
@@ -196,23 +477,23 @@ var Map4v = function () {
                         }
                     }
                 } catch (err) {
-                    _didIteratorError2 = true;
-                    _iteratorError2 = err;
+                    _didIteratorError7 = true;
+                    _iteratorError7 = err;
                 } finally {
                     try {
-                        if (!_iteratorNormalCompletion2 && _iterator2.return) {
-                            _iterator2.return();
+                        if (!_iteratorNormalCompletion7 && _iterator7.return) {
+                            _iterator7.return();
                         }
                     } finally {
-                        if (_didIteratorError2) {
-                            throw _iteratorError2;
+                        if (_didIteratorError7) {
+                            throw _iteratorError7;
                         }
                     }
                 }
 
-                components.push(component);
+                this.components.push(component);
             }
-            this.components = components;
+            return this.components;
         }
     }, {
         key: "component",
@@ -228,6 +509,16 @@ var Map4v = function () {
             } while (arc != start_arc);
 
             return component;
+        }
+    }, {
+        key: "out_vert_i",
+        value: function out_vert_i(arc) {
+            return arc.vert;
+        }
+    }, {
+        key: "in_vert_i",
+        value: function in_vert_i(arc) {
+            return this.edges[arc.edge][(arc.edgepos + 1) % 2].vert;
         }
     }, {
         key: "new_arc",
@@ -266,7 +557,7 @@ var Map4v = function () {
         }
     }]);
 
-    return Map4v;
+    return LinkShadow;
 }();
 
 var TriangleMesh = function () {
@@ -284,29 +575,29 @@ var TriangleMesh = function () {
         key: "adjacent_edges",
         value: function adjacent_edges(vert) {
             var adj = [];
-            var _iteratorNormalCompletion3 = true;
-            var _didIteratorError3 = false;
-            var _iteratorError3 = undefined;
+            var _iteratorNormalCompletion8 = true;
+            var _didIteratorError8 = false;
+            var _iteratorError8 = undefined;
 
             try {
-                for (var _iterator3 = this.edges[Symbol.iterator](), _step3; !(_iteratorNormalCompletion3 = (_step3 = _iterator3.next()).done); _iteratorNormalCompletion3 = true) {
-                    var edge = _step3.value;
+                for (var _iterator8 = this.edges[Symbol.iterator](), _step8; !(_iteratorNormalCompletion8 = (_step8 = _iterator8.next()).done); _iteratorNormalCompletion8 = true) {
+                    var edge = _step8.value;
 
                     if (edge.indexOf(vert) >= 0) {
                         adj.push(edge);
                     }
                 }
             } catch (err) {
-                _didIteratorError3 = true;
-                _iteratorError3 = err;
+                _didIteratorError8 = true;
+                _iteratorError8 = err;
             } finally {
                 try {
-                    if (!_iteratorNormalCompletion3 && _iterator3.return) {
-                        _iterator3.return();
+                    if (!_iteratorNormalCompletion8 && _iterator8.return) {
+                        _iterator8.return();
                     }
                 } finally {
-                    if (_didIteratorError3) {
-                        throw _iteratorError3;
+                    if (_didIteratorError8) {
+                        throw _iteratorError8;
                     }
                 }
             }
@@ -439,13 +730,13 @@ var DiscreteRiemannMetric = function () {
         value: function update() {
             this.gamma = exp(this.u);
 
-            var _iteratorNormalCompletion4 = true;
-            var _didIteratorError4 = false;
-            var _iteratorError4 = undefined;
+            var _iteratorNormalCompletion9 = true;
+            var _didIteratorError9 = false;
+            var _iteratorError9 = undefined;
 
             try {
-                for (var _iterator4 = this.mesh.edges[Symbol.iterator](), _step4; !(_iteratorNormalCompletion4 = (_step4 = _iterator4.next()).done); _iteratorNormalCompletion4 = true) {
-                    var edge = _step4.value;
+                for (var _iterator9 = this.mesh.edges[Symbol.iterator](), _step9; !(_iteratorNormalCompletion9 = (_step9 = _iterator9.next()).done); _iteratorNormalCompletion9 = true) {
+                    var edge = _step9.value;
 
                     var l = this.compute_length(edge);
                     this.l.val[edge[0] * this.l.n + edge[1]] = l;
@@ -454,50 +745,50 @@ var DiscreteRiemannMetric = function () {
 
                 // Set angles using law of cosines
             } catch (err) {
-                _didIteratorError4 = true;
-                _iteratorError4 = err;
+                _didIteratorError9 = true;
+                _iteratorError9 = err;
             } finally {
                 try {
-                    if (!_iteratorNormalCompletion4 && _iterator4.return) {
-                        _iterator4.return();
+                    if (!_iteratorNormalCompletion9 && _iterator9.return) {
+                        _iterator9.return();
                     }
                 } finally {
-                    if (_didIteratorError4) {
-                        throw _iteratorError4;
+                    if (_didIteratorError9) {
+                        throw _iteratorError9;
                     }
                 }
             }
 
-            var _iteratorNormalCompletion5 = true;
-            var _didIteratorError5 = false;
-            var _iteratorError5 = undefined;
+            var _iteratorNormalCompletion10 = true;
+            var _didIteratorError10 = false;
+            var _iteratorError10 = undefined;
 
             try {
-                for (var _iterator5 = this.mesh.faces[Symbol.iterator](), _step5; !(_iteratorNormalCompletion5 = (_step5 = _iterator5.next()).done); _iteratorNormalCompletion5 = true) {
-                    var face = _step5.value;
-                    var _iteratorNormalCompletion6 = true;
-                    var _didIteratorError6 = false;
-                    var _iteratorError6 = undefined;
+                for (var _iterator10 = this.mesh.faces[Symbol.iterator](), _step10; !(_iteratorNormalCompletion10 = (_step10 = _iterator10.next()).done); _iteratorNormalCompletion10 = true) {
+                    var face = _step10.value;
+                    var _iteratorNormalCompletion11 = true;
+                    var _didIteratorError11 = false;
+                    var _iteratorError11 = undefined;
 
                     try {
-                        for (var _iterator6 = partition_face(face)[Symbol.iterator](), _step6; !(_iteratorNormalCompletion6 = (_step6 = _iterator6.next()).done); _iteratorNormalCompletion6 = true) {
-                            var part = _step6.value;
+                        for (var _iterator11 = partition_face(face)[Symbol.iterator](), _step11; !(_iteratorNormalCompletion11 = (_step11 = _iterator11.next()).done); _iteratorNormalCompletion11 = true) {
+                            var part = _step11.value;
 
                             var theta = this.compute_angle(face, part[0]);
                             this.theta[[part[0], part[1][0], part[1][1]]] = theta;
                             this.theta[[part[0], part[1][1], part[1][0]]] = theta;
                         }
                     } catch (err) {
-                        _didIteratorError6 = true;
-                        _iteratorError6 = err;
+                        _didIteratorError11 = true;
+                        _iteratorError11 = err;
                     } finally {
                         try {
-                            if (!_iteratorNormalCompletion6 && _iterator6.return) {
-                                _iterator6.return();
+                            if (!_iteratorNormalCompletion11 && _iterator11.return) {
+                                _iterator11.return();
                             }
                         } finally {
-                            if (_didIteratorError6) {
-                                throw _iteratorError6;
+                            if (_didIteratorError11) {
+                                throw _iteratorError11;
                             }
                         }
                     }
@@ -505,16 +796,16 @@ var DiscreteRiemannMetric = function () {
 
                 // Set curvatures
             } catch (err) {
-                _didIteratorError5 = true;
-                _iteratorError5 = err;
+                _didIteratorError10 = true;
+                _iteratorError10 = err;
             } finally {
                 try {
-                    if (!_iteratorNormalCompletion5 && _iterator5.return) {
-                        _iterator5.return();
+                    if (!_iteratorNormalCompletion10 && _iterator10.return) {
+                        _iterator10.return();
                     }
                 } finally {
-                    if (_didIteratorError5) {
-                        throw _iteratorError5;
+                    if (_didIteratorError10) {
+                        throw _iteratorError10;
                     }
                 }
             }
@@ -528,44 +819,6 @@ var DiscreteRiemannMetric = function () {
             var dt = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 0.05;
             var thresh = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : 1e-4;
 
-            if (target_K == null) {}
-
-            var g = new DiscreteRiemannMetric(this.mesh, this.gamma, this.phi);
-
-            var K = g.K;
-            var DeltaK = sub(target_K, K);
-
-            var _failsafe = 0;
-            while (max(abs(DeltaK)) > thresh) {
-                var H = this.hessian();
-                var deltau = least_squares(H, DeltaK);
-
-                g.u = sub(g.u, mul(dt, deltau));
-
-                g.update();
-
-                K = g.K;
-                DeltaK = sub(target_K, K);
-
-                //console.log(math.max(math.abs(DeltaK)));
-
-                _failsafe += 1;
-                if (_failsafe > 1000) {
-                    console.log("Took too long to flatten; abort!");
-                    return g;
-                }
-            }
-
-            return g;
-        }
-    }, {
-        key: "newton_async",
-        value: function newton_async(f) {
-            var target_K = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : null;
-            var dt = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : 0.05;
-            var thresh = arguments.length > 3 && arguments[3] !== undefined ? arguments[3] : 1e-4;
-
-            /* Asynchronous; passes resultant g to function f */
             if (target_K == null) {}
 
             var g = new DiscreteRiemannMetric(this.mesh, this.gamma, this.phi);
@@ -617,13 +870,13 @@ var DiscreteRiemannMetric = function () {
             var H = zeros(n, n);
             var t = this.tau2;
 
-            var _iteratorNormalCompletion7 = true;
-            var _didIteratorError7 = false;
-            var _iteratorError7 = undefined;
+            var _iteratorNormalCompletion12 = true;
+            var _didIteratorError12 = false;
+            var _iteratorError12 = undefined;
 
             try {
-                for (var _iterator7 = this.mesh.faces[Symbol.iterator](), _step7; !(_iteratorNormalCompletion7 = (_step7 = _iterator7.next()).done); _iteratorNormalCompletion7 = true) {
-                    var face = _step7.value;
+                for (var _iterator12 = this.mesh.faces[Symbol.iterator](), _step12; !(_iteratorNormalCompletion12 = (_step12 = _iterator12.next()).done); _iteratorNormalCompletion12 = true) {
+                    var face = _step12.value;
 
                     var i = face[0];
                     var j = face[1];
@@ -663,20 +916,21 @@ var DiscreteRiemannMetric = function () {
                     }
                 }
             } catch (err) {
-                _didIteratorError7 = true;
-                _iteratorError7 = err;
+                _didIteratorError12 = true;
+                _iteratorError12 = err;
             } finally {
                 try {
-                    if (!_iteratorNormalCompletion7 && _iterator7.return) {
-                        _iterator7.return();
+                    if (!_iteratorNormalCompletion12 && _iterator12.return) {
+                        _iterator12.return();
                     }
                 } finally {
-                    if (_didIteratorError7) {
-                        throw _iteratorError7;
+                    if (_didIteratorError12) {
+                        throw _iteratorError12;
                     }
                 }
             }
 
+            console.log(det(H));
             return H;
         }
     }], [{
@@ -688,28 +942,28 @@ var DiscreteRiemannMetric = function () {
             }, this);
             var phi = zeros(n, n);
 
-            var _iteratorNormalCompletion8 = true;
-            var _didIteratorError8 = false;
-            var _iteratorError8 = undefined;
+            var _iteratorNormalCompletion13 = true;
+            var _didIteratorError13 = false;
+            var _iteratorError13 = undefined;
 
             try {
-                for (var _iterator8 = mesh.edges[Symbol.iterator](), _step8; !(_iteratorNormalCompletion8 = (_step8 = _iterator8.next()).done); _iteratorNormalCompletion8 = true) {
-                    var edge = _step8.value;
+                for (var _iterator13 = mesh.edges[Symbol.iterator](), _step13; !(_iteratorNormalCompletion13 = (_step13 = _iterator13.next()).done); _iteratorNormalCompletion13 = true) {
+                    var edge = _step13.value;
 
                     phi.val[edge[0] * phi.n + edge[1]] = 0;
                     phi.val[edge[1] * phi.n + edge[0]] = 0;
                 }
             } catch (err) {
-                _didIteratorError8 = true;
-                _iteratorError8 = err;
+                _didIteratorError13 = true;
+                _iteratorError13 = err;
             } finally {
                 try {
-                    if (!_iteratorNormalCompletion8 && _iterator8.return) {
-                        _iterator8.return();
+                    if (!_iteratorNormalCompletion13 && _iterator13.return) {
+                        _iterator13.return();
                     }
                 } finally {
-                    if (_didIteratorError8) {
-                        throw _iteratorError8;
+                    if (_didIteratorError13) {
+                        throw _iteratorError13;
                     }
                 }
             }
@@ -724,13 +978,13 @@ var DiscreteRiemannMetric = function () {
 function adjacent_faces_and_edge(faces, face) {
     var adj = [];
 
-    var _iteratorNormalCompletion9 = true;
-    var _didIteratorError9 = false;
-    var _iteratorError9 = undefined;
+    var _iteratorNormalCompletion14 = true;
+    var _didIteratorError14 = false;
+    var _iteratorError14 = undefined;
 
     try {
-        for (var _iterator9 = faces[Symbol.iterator](), _step9; !(_iteratorNormalCompletion9 = (_step9 = _iterator9.next()).done); _iteratorNormalCompletion9 = true) {
-            var aface = _step9.value;
+        for (var _iterator14 = faces[Symbol.iterator](), _step14; !(_iteratorNormalCompletion14 = (_step14 = _iterator14.next()).done); _iteratorNormalCompletion14 = true) {
+            var aface = _step14.value;
 
             var e = aface.filter(function (v) {
                 return face.indexOf(v) >= 0;
@@ -744,16 +998,16 @@ function adjacent_faces_and_edge(faces, face) {
             }
         }
     } catch (err) {
-        _didIteratorError9 = true;
-        _iteratorError9 = err;
+        _didIteratorError14 = true;
+        _iteratorError14 = err;
     } finally {
         try {
-            if (!_iteratorNormalCompletion9 && _iterator9.return) {
-                _iterator9.return();
+            if (!_iteratorNormalCompletion14 && _iterator14.return) {
+                _iterator14.return();
             }
         } finally {
-            if (_didIteratorError9) {
-                throw _iteratorError9;
+            if (_didIteratorError14) {
+                throw _iteratorError14;
             }
         }
     }
@@ -764,13 +1018,13 @@ function adjacent_faces_and_edge(faces, face) {
 function adj_or_faces_and_edge(faces, face) {
     var adj = [];
 
-    var _iteratorNormalCompletion10 = true;
-    var _didIteratorError10 = false;
-    var _iteratorError10 = undefined;
+    var _iteratorNormalCompletion15 = true;
+    var _didIteratorError15 = false;
+    var _iteratorError15 = undefined;
 
     try {
-        for (var _iterator10 = faces[Symbol.iterator](), _step10; !(_iteratorNormalCompletion10 = (_step10 = _iterator10.next()).done); _iteratorNormalCompletion10 = true) {
-            var aface = _step10.value;
+        for (var _iterator15 = faces[Symbol.iterator](), _step15; !(_iteratorNormalCompletion15 = (_step15 = _iterator15.next()).done); _iteratorNormalCompletion15 = true) {
+            var aface = _step15.value;
 
             if (aface.indexOf(face[0]) >= 0 && aface.indexOf(face[1]) >= 0) {
                 adj.push([aface, [face[0], face[1]]]);
@@ -781,16 +1035,16 @@ function adj_or_faces_and_edge(faces, face) {
             }
         }
     } catch (err) {
-        _didIteratorError10 = true;
-        _iteratorError10 = err;
+        _didIteratorError15 = true;
+        _iteratorError15 = err;
     } finally {
         try {
-            if (!_iteratorNormalCompletion10 && _iterator10.return) {
-                _iterator10.return();
+            if (!_iteratorNormalCompletion15 && _iterator15.return) {
+                _iterator15.return();
             }
         } finally {
-            if (_didIteratorError10) {
-                throw _iteratorError10;
+            if (_didIteratorError15) {
+                throw _iteratorError15;
             }
         }
     }
@@ -808,27 +1062,27 @@ function orient_faces(faces) {
     edges.concat([[f_0[0], f_0[1]], [f_0[1], f_0[2]], [f_0[2], f_0[0]]]);
     oriented.push(f_0);
 
-    var _iteratorNormalCompletion11 = true;
-    var _didIteratorError11 = false;
-    var _iteratorError11 = undefined;
+    var _iteratorNormalCompletion16 = true;
+    var _didIteratorError16 = false;
+    var _iteratorError16 = undefined;
 
     try {
-        for (var _iterator11 = adjacent_faces_and_edge(to_orient, f_0)[Symbol.iterator](), _step11; !(_iteratorNormalCompletion11 = (_step11 = _iterator11.next()).done); _iteratorNormalCompletion11 = true) {
-            var adj_pair = _step11.value;
+        for (var _iterator16 = adjacent_faces_and_edge(to_orient, f_0)[Symbol.iterator](), _step16; !(_iteratorNormalCompletion16 = (_step16 = _iterator16.next()).done); _iteratorNormalCompletion16 = true) {
+            var adj_pair = _step16.value;
 
             adj_queue.add(adj_pair);
         }
     } catch (err) {
-        _didIteratorError11 = true;
-        _iteratorError11 = err;
+        _didIteratorError16 = true;
+        _iteratorError16 = err;
     } finally {
         try {
-            if (!_iteratorNormalCompletion11 && _iterator11.return) {
-                _iterator11.return();
+            if (!_iteratorNormalCompletion16 && _iterator16.return) {
+                _iterator16.return();
             }
         } finally {
-            if (_didIteratorError11) {
-                throw _iteratorError11;
+            if (_didIteratorError16) {
+                throw _iteratorError16;
             }
         }
     }
@@ -879,27 +1133,27 @@ function orient_faces(faces) {
         oriented.push([i, j, k]);
 
         to_orient.splice(to_orient.indexOf(F), 1);
-        var _iteratorNormalCompletion12 = true;
-        var _didIteratorError12 = false;
-        var _iteratorError12 = undefined;
+        var _iteratorNormalCompletion17 = true;
+        var _didIteratorError17 = false;
+        var _iteratorError17 = undefined;
 
         try {
-            for (var _iterator12 = adjacent_faces_and_edge(to_orient, [i, j, k])[Symbol.iterator](), _step12; !(_iteratorNormalCompletion12 = (_step12 = _iterator12.next()).done); _iteratorNormalCompletion12 = true) {
-                var _adj_pair2 = _step12.value;
+            for (var _iterator17 = adjacent_faces_and_edge(to_orient, [i, j, k])[Symbol.iterator](), _step17; !(_iteratorNormalCompletion17 = (_step17 = _iterator17.next()).done); _iteratorNormalCompletion17 = true) {
+                var _adj_pair2 = _step17.value;
 
                 adj_queue.add(_adj_pair2);
             }
         } catch (err) {
-            _didIteratorError12 = true;
-            _iteratorError12 = err;
+            _didIteratorError17 = true;
+            _iteratorError17 = err;
         } finally {
             try {
-                if (!_iteratorNormalCompletion12 && _iterator12.return) {
-                    _iterator12.return();
+                if (!_iteratorNormalCompletion17 && _iterator17.return) {
+                    _iterator17.return();
                 }
             } finally {
-                if (_didIteratorError12) {
-                    throw _iteratorError12;
+                if (_didIteratorError17) {
+                    throw _iteratorError17;
                 }
             }
         }
@@ -947,27 +1201,27 @@ function embed_faces(g) {
     phi[[i, k]] = phi_ik;
     phi[[k, i]] = pi + phi_ik;
 
-    var _iteratorNormalCompletion13 = true;
-    var _didIteratorError13 = false;
-    var _iteratorError13 = undefined;
+    var _iteratorNormalCompletion18 = true;
+    var _didIteratorError18 = false;
+    var _iteratorError18 = undefined;
 
     try {
-        for (var _iterator13 = adj_or_faces_and_edge(to_embed, f_0)[Symbol.iterator](), _step13; !(_iteratorNormalCompletion13 = (_step13 = _iterator13.next()).done); _iteratorNormalCompletion13 = true) {
-            var adj_pair = _step13.value;
+        for (var _iterator18 = adj_or_faces_and_edge(to_embed, f_0)[Symbol.iterator](), _step18; !(_iteratorNormalCompletion18 = (_step18 = _iterator18.next()).done); _iteratorNormalCompletion18 = true) {
+            var adj_pair = _step18.value;
 
             embed_queue.add(adj_pair);
         }
     } catch (err) {
-        _didIteratorError13 = true;
-        _iteratorError13 = err;
+        _didIteratorError18 = true;
+        _iteratorError18 = err;
     } finally {
         try {
-            if (!_iteratorNormalCompletion13 && _iterator13.return) {
-                _iterator13.return();
+            if (!_iteratorNormalCompletion18 && _iterator18.return) {
+                _iterator18.return();
             }
         } finally {
-            if (_didIteratorError13) {
-                throw _iteratorError13;
+            if (_didIteratorError18) {
+                throw _iteratorError18;
             }
         }
     }
@@ -1040,27 +1294,27 @@ function embed_faces(g) {
         }
 
         to_embed.splice(to_embed.indexOf(F), 1);
-        var _iteratorNormalCompletion14 = true;
-        var _didIteratorError14 = false;
-        var _iteratorError14 = undefined;
+        var _iteratorNormalCompletion19 = true;
+        var _didIteratorError19 = false;
+        var _iteratorError19 = undefined;
 
         try {
-            for (var _iterator14 = adj_or_faces_and_edge(to_embed, F)[Symbol.iterator](), _step14; !(_iteratorNormalCompletion14 = (_step14 = _iterator14.next()).done); _iteratorNormalCompletion14 = true) {
-                var _adj_pair4 = _step14.value;
+            for (var _iterator19 = adj_or_faces_and_edge(to_embed, F)[Symbol.iterator](), _step19; !(_iteratorNormalCompletion19 = (_step19 = _iterator19.next()).done); _iteratorNormalCompletion19 = true) {
+                var _adj_pair4 = _step19.value;
 
                 embed_queue.add(_adj_pair4);
             }
         } catch (err) {
-            _didIteratorError14 = true;
-            _iteratorError14 = err;
+            _didIteratorError19 = true;
+            _iteratorError19 = err;
         } finally {
             try {
-                if (!_iteratorNormalCompletion14 && _iterator14.return) {
-                    _iterator14.return();
+                if (!_iteratorNormalCompletion19 && _iterator19.return) {
+                    _iterator19.return();
                 }
             } finally {
-                if (_didIteratorError14) {
-                    throw _iteratorError14;
+                if (_didIteratorError19) {
+                    throw _iteratorError19;
                 }
             }
         }
@@ -1074,85 +1328,72 @@ onmessage = function onmessage(e) {
     var cross_bend = e.data[1];
     var tstart = Date.now();
 
-    var m4v = new Map4v(sigma);
+    var m4v = new LinkShadow(sigma);
 
+    //let triangulation = m4v.old_triangulate();
     var triangulation = m4v.triangulate();
 
-    //console.log(triangulation);
+    console.log(triangulation);
+    //console.log(m4v.old_triangulate());
 
     var testMesh = new TriangleMesh(triangulation[0], triangulation[1], triangulation[2], triangulation[3]);
 
+    console.log(testMesh);
+
     var cpmetric = DiscreteRiemannMetric.from_triangle_mesh(testMesh);
 
-    var K = zeros(testMesh.verts.length);
-    //K.subset(math.index(testMesh.bdyverts, 0),
-    //         testMesh.bdyverts.map(function(b) { return 2*Math.PI/testMesh.bdyverts.length; }));
-
-    // Set boundary crossing target curvature
-    var bdyCross = testMesh.bdyverts.filter(function (vi) {
-        return vi < m4v.nv;
-    });
-    var bdyEdge = testMesh.bdyverts.filter(function (vi) {
-        return vi >= m4v.nv && vi < m4v.nv + m4v.ne;
-    });
-    var fac = 8; // Inverse of how concave crossing vertices should be imbedded
-    var _iteratorNormalCompletion15 = true;
-    var _didIteratorError15 = false;
-    var _iteratorError15 = undefined;
+    var K = zeros(testMesh.verts.length, 1);
+    var _iteratorNormalCompletion20 = true;
+    var _didIteratorError20 = false;
+    var _iteratorError20 = undefined;
 
     try {
-        for (var _iterator15 = bdyCross[Symbol.iterator](), _step15; !(_iteratorNormalCompletion15 = (_step15 = _iterator15.next()).done); _iteratorNormalCompletion15 = true) {
-            var bci = _step15.value;
+        for (var _iterator20 = testMesh.bdyverts[Symbol.iterator](), _step20; !(_iteratorNormalCompletion20 = (_step20 = _iterator20.next()).done); _iteratorNormalCompletion20 = true) {
+            var bi = _step20.value;
 
-            K[bci] = -Math.PI / fac;
+            K[bi] = 2 * Math.PI / testMesh.bdyverts.length;
         }
+
+        // Set boundary crossing target curvature
+        //let bdyCross = testMesh.bdyverts.filter(vi => triangulation[4].verts.includes(vi));
+        //let bdyEdge = testMesh.bdyverts.filter(vi => !triangulation[4].verts.includes(vi));
+        //let fac = 8; // Inverse of how concave crossing vertices should be imbedded
+        //for (let bci of bdyCross) {
+        //    K[bci] = -Math.PI/fac;
+        //}
+        //for (let bei of bdyEdge) {
+        //    K[bei] = (2*Math.PI + bdyCross.length*Math.PI/fac)/bdyEdge.length;
+        //}
     } catch (err) {
-        _didIteratorError15 = true;
-        _iteratorError15 = err;
+        _didIteratorError20 = true;
+        _iteratorError20 = err;
     } finally {
         try {
-            if (!_iteratorNormalCompletion15 && _iterator15.return) {
-                _iterator15.return();
+            if (!_iteratorNormalCompletion20 && _iterator20.return) {
+                _iterator20.return();
             }
         } finally {
-            if (_didIteratorError15) {
-                throw _iteratorError15;
+            if (_didIteratorError20) {
+                throw _iteratorError20;
             }
         }
     }
 
-    var _iteratorNormalCompletion16 = true;
-    var _didIteratorError16 = false;
-    var _iteratorError16 = undefined;
+    console.log(K);
 
-    try {
-        for (var _iterator16 = bdyEdge[Symbol.iterator](), _step16; !(_iteratorNormalCompletion16 = (_step16 = _iterator16.next()).done); _iteratorNormalCompletion16 = true) {
-            var bei = _step16.value;
+    var flat_poly = cpmetric.newton(K, 1, 1e-2);
 
-            K[bei] = (2 * Math.PI + bdyCross.length * Math.PI / fac) / bdyEdge.length;
-        }
-    } catch (err) {
-        _didIteratorError16 = true;
-        _iteratorError16 = err;
-    } finally {
-        try {
-            if (!_iteratorNormalCompletion16 && _iterator16.return) {
-                _iterator16.return();
-            }
-        } finally {
-            if (_didIteratorError16) {
-                throw _iteratorError16;
-            }
-        }
-    }
-
-    var flat_poly = cpmetric.newton(K, 1, 5e-2);
+    console.log(flat_poly);
 
     var embedding = embed_faces(flat_poly);
+
+    console.log(embedding);
 
     postMessage({
         flat_poly: flat_poly,
         embedding: embedding,
-        m4v: m4v });
+        m4v: m4v,
+        conv: triangulation[4] });
     console.log("Computation finished in: " + (Date.now() - tstart) + " milliseconds");
 };
+//# sourceMappingURL=cp_worker.js.map

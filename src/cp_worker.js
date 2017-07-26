@@ -1,12 +1,13 @@
 importScripts('lalolib/lalolib.js');
 
 function least_squares(X /* : Matrix */, Y /* : Matrix */) /* : least_squares */ {
+    console.log("X", X, inv(X), det(X), Y);
     let betaHat = solve(mul(X, transpose(X)), mul(X, Y));
 
     return betaHat;
 }
 
-class Map4v {
+class LinkShadow {
     constructor(verts) {
         this.nv = verts.length;
         this.ne = this.nv*2;
@@ -36,10 +37,183 @@ class Map4v {
     }
 
     triangulate(bdry_face_i=undefined) {
+        if (bdry_face_i === undefined) {
+            let sizes = this.faces.map((f) => f.length);
+            bdry_face_i = sizes.indexOf(max(sizes));
+        }
+
+        /* Allowing for triangulations of maps with isthmi require that some
+         * triangles are not necessarily of the form f,e,v and for some edges
+         * (i.e. monogon edges) to have multiple triangulation vertices in order
+         * to avoid singular flat embeddings.
+         *
+         * This also complicates the old idea that arcs mapped injectively into
+         * triangulation edges---so it might be easiest to keep a new data
+         * structure with component mappings instead.
+         */
+
+        let triangles = [];
+
+        // We will now build the array of triangulation verts dynamically;
+        // furthermore we will make them data objects which hold references to
+        // appropriate objects
+        let verts = [];
+
+        // We will build edges of the triangulation as we process, too.
+        let edges = [];
+
+        // We will now calculate boundary vertices later; external faces with,
+        // say, isthmi will require scaffolding which makes some vertices which
+        // used to be boundary vertices internal.
+        let bdy_face = this.faces[bdry_face_i];
+        let bdy_verts;
+
+        /* Since we want to be mindful of the paths---the components---when we
+         * draw the diagram, we will create the triangulation as follows: We
+         * will first run through each component, creating verts and edges as we
+         * go. We will then consider faces (and the boundary face). */
+        let tri_map = {
+            verts: [],
+            edges: [],
+            faces: [],
+            comps: [],
+            arcs : []
+        };
+
+        for (let component of this.components) {
+            let tri_comp = [];
+            for (let arc of component) {
+                // Add a new vert for the out_vert of this arc, unless we've already
+                // hit this vertex before.
+                if (tri_map.verts[this.out_vert_i(arc)] === undefined) {
+                    tri_map.verts[this.out_vert_i(arc)] = (verts.length);
+                    verts.push(verts.length);
+                }
+                // Regardless, add this vert to the component
+                tri_comp.push(tri_map.verts[this.out_vert_i(arc)]);
+
+                // Add a new vert for the edge of this arc
+                tri_map.edges[arc.edge] = [verts.length];
+                tri_comp.push(verts.length);
+                verts.push(verts.length);
+
+                if (this.out_vert_i(arc) == this.in_vert_i(arc)) {
+                    // This arc corresponds to a monogon, and so we must add two
+                    // edge vertices rather than one
+                    tri_map.edges[arc.edge].push(verts.length);
+                    tri_comp.push(verts.length);
+                    verts.push(verts.length);
+                }
+
+                // Add this edge to tri_map.arcs, which contains direction information
+                tri_map.arcs[arc.index] = tri_map.edges[arc.edge];
+                tri_map.arcs[this.edges[arc.edge][(arc.edgepos+1)%2].index
+                            ] = tri_map.edges[arc.edge].slice().reverse();
+            }
+
+            // Push this component on
+            tri_map.comps.push(tri_comp);
+
+            // Add triangulation edges for this component
+            for (let cvi = 0; cvi < tri_comp.length-1; cvi++) {
+                edges.push([tri_comp[cvi], tri_comp[cvi+1]]);
+            }
+            edges.push([tri_comp[tri_comp.length-1], tri_comp[0]]);
+        }
+
+        // Every vertex now has a corresponding tri vertex
+        // Every edge now has a corresponding tri vertex (or two)
+        // We must now go through and process the faces.
+        for (let fi in this.faces) {
+            // Regardless, we must identify what isthmi this face has
+            // isthmus_arcs will contain one arc for each vertex---the other arc
+            // will necessarily be vertex-opposite.
+            let isthmus_arcs = [];
+            let isthmus_vert = [];
+
+            let _seen_vi = [];
+            for (let arc of this.faces[fi]) {
+                if (_seen_vi.includes(arc.vert)) {
+                    isthmus_arcs.push(arc);
+                    isthmus_vert.push(arc.vert);
+                } else {
+                    _seen_vi.push(arc.vert);
+                }
+            }
+
+            // Independent of whether this face is a boundary face, we must
+            // add scaffolding for any isthmi, if there are any.
+            for (let arc of isthmus_arcs) {
+                // Add scaffolding for this arc
+                let pre_arc = this.verts[arc.vert][(arc.vert+3)%4];
+                console.log("!!", arc, tri_map.edges[arc.edge], tri_map.arcs[arc.index]);
+                edges.push([tri_map.arcs[arc.index][0],
+                            tri_map.arcs[pre_arc.index][0]]);
+
+                triangles.push([tri_map.arcs[arc.index][0],
+                                tri_map.arcs[pre_arc.index][0],
+                                tri_map.verts[arc.vert]]);
+
+                // Add scaffolding for opposite arc
+                let o_arc = this.verts[arc.vert][(arc.vertpos+2)%4];
+                console.log("~~", o_arc);
+                pre_arc = this.verts[o_arc.vert][(o_arc.vert+1)%4];
+                edges.push([tri_map.arcs[o_arc.index][0],
+                            tri_map.arcs[pre_arc.index][0]]);
+
+                triangles.push([tri_map.arcs[o_arc.index][0],
+                                tri_map.arcs[pre_arc.index][0],
+                                tri_map.verts[o_arc.vert]]);
+            }
+
+            // Finally, get a list of tri verts around this face.
+            let tri_face = [];
+            for (let arc of this.faces[fi]) {
+                if (!isthmus_vert.includes(arc.vert)) {
+                    // If this vertex is not an isthmus, then it'll be in the
+                    // face
+                    tri_face.push(tri_map.verts[arc.vert]);
+                }
+
+                // This arcs triangulation vertices need to be added, too
+                tri_face.splice(tri_face.length, 0, ...tri_map.arcs[arc.index]);
+            }
+
+            console.log(tri_face);
+
+            if (fi == bdry_face_i) {
+                // This face is the boundary face and must be processed
+                tri_map.faces[fi] = [];
+                bdy_verts = tri_face;
+
+            } else {
+                // This face is an internal face. As we triangulate, each face
+                // has precisely one vertex, although through R-moves it is
+                // possible that faces will ultimately consist of several
+                // vertices.
+                tri_map.faces[fi] = [verts.length];
+
+                // For each vertex in this face we add an edge, and a face
+                edges.push([verts.length, tri_face[0]]);
+                for (let vi = 1; vi < tri_face.length; vi++) {
+                    edges.push([verts.length, tri_face[vi]]);
+                    triangles.push([verts.length, tri_face[vi-1], tri_face[vi]]);
+                }
+                triangles.push([verts.length, tri_face[tri_face.length-1], tri_face[0]]);
+
+                // Finally, add this vertex to verts
+                verts.push(verts.length);
+            }
+        }
+
+        return [verts, bdy_verts, edges, triangles, tri_map];
+    }
+
+    old_triangulate(bdry_face_i=undefined) {
         let faces = this.faces;
 
         if (bdry_face_i === undefined) {
-            let sizes = faces.map((f) => { return f.length; }, this);
+            let sizes = faces.map((f) => f.length, this);
             bdry_face_i = sizes.indexOf(max(sizes));
         }
 
@@ -102,7 +276,7 @@ class Map4v {
 
     generate_faces() {
         let left_arcs = new Set(this.arcs);
-        let faces = [];
+        this.faces = [];
 
         while(left_arcs.size > 0) {
             let start_arc = Array.from(left_arcs).pop();
@@ -120,22 +294,21 @@ class Map4v {
                 //console.log(arc);
                 _failsafe += 1;
                 if (_failsafe > 500) {
-                    console.log("Failure")
-                    return faces;
+                    console.log("Failure");
+                    return this.faces;
                 }
             } while (arc != start_arc)
 
-            face.reverse();
-            faces.push(face);
+            //face.reverse();
+            this.faces.push(face);
         }
-
-        this.faces = faces;
+        return this.faces;
     }
 
     generate_components(one_orient=true) {
         let left_arcs = new Set(this.arcs);
 
-        let components = [];
+        this.components = [];
         while (left_arcs.size > 0) {
             let start_arc = Array.from(left_arcs).pop();
 
@@ -148,9 +321,9 @@ class Map4v {
                 }
             }
 
-            components.push(component);
+            this.components.push(component);
         }
-        this.components = components;
+        return this.components;
     }
 
     component(arc) {
@@ -165,6 +338,14 @@ class Map4v {
         } while (arc != start_arc)
 
         return component;
+    }
+
+    out_vert_i(arc) {
+        return arc.vert;
+    }
+
+    in_vert_i(arc) {
+        return this.edges[arc.edge][(arc.edgepos+1)%2].vert;
     }
 
     new_arc(idx) {
@@ -376,42 +557,6 @@ class DiscreteRiemannMetric {
         return g;
     }
 
-    newton_async(f, target_K=null, dt=0.05, thresh=1e-4) {
-        /* Asynchronous; passes resultant g to function f */
-        if (target_K == null) {
-
-        }
-
-        let g = new DiscreteRiemannMetric(this.mesh, this.gamma, this.phi);
-
-        let K = g.K;
-        let DeltaK = sub(target_K, K);
-
-        let _failsafe = 0;
-        while (max(abs(DeltaK)) > thresh){
-            let H = this.hessian();
-            let deltau = least_squares(H, DeltaK);
-
-            g.u = sub(g.u, mul(dt, deltau));
-
-            g.update();
-
-            K = g.K;
-            DeltaK = sub(target_K, K);
-
-            //console.log(math.max(math.abs(DeltaK)));
-
-            _failsafe += 1;
-            if (_failsafe > 1000) {
-                console.log("Took too long to flatten; abort!");
-                return g;
-            }
-        }
-
-        return g;
-    }
-
-
     tau2(l_jk, g_j, g_k) {
         return .5*(l_jk**2 + g_j**2 - g_k**2);
     }
@@ -469,6 +614,7 @@ class DiscreteRiemannMetric {
                 }
             }
         }
+        console.log(det(H));
         return H;
     }
 }
@@ -696,40 +842,51 @@ onmessage = function(e) {
     let cross_bend = e.data[1];
     var tstart = Date.now();
 
-    let m4v = new Map4v(sigma);
+    let m4v = new LinkShadow(sigma);
 
+    //let triangulation = m4v.old_triangulate();
     let triangulation = m4v.triangulate();
 
-    //console.log(triangulation);
+    console.log(triangulation);
+    //console.log(m4v.old_triangulate());
 
     let testMesh = new TriangleMesh(
         triangulation[0], triangulation[1], triangulation[2], triangulation[3]
     );
 
+    console.log(testMesh);
+
     let cpmetric = DiscreteRiemannMetric.from_triangle_mesh(testMesh);
 
-    let K = zeros(testMesh.verts.length);
-    //K.subset(math.index(testMesh.bdyverts, 0),
-    //         testMesh.bdyverts.map(function(b) { return 2*Math.PI/testMesh.bdyverts.length; }));
+    let K = zeros(testMesh.verts.length, 1);
+    for (let bi of testMesh.bdyverts) {
+        K[bi] = 2*Math.PI/testMesh.bdyverts.length;
+    }
 
     // Set boundary crossing target curvature
-    let bdyCross = testMesh.bdyverts.filter(function(vi) { return vi < m4v.nv; });
-    let bdyEdge = testMesh.bdyverts.filter(function(vi) { return (vi >= m4v.nv && vi < m4v.nv+m4v.ne); });
-    let fac = 8; // Inverse of how concave crossing vertices should be imbedded
-    for (let bci of bdyCross) {
-        K[bci] = -Math.PI/fac;
-    }
-    for (let bei of bdyEdge) {
-        K[bei] = (2*Math.PI + bdyCross.length*Math.PI/fac)/bdyEdge.length;
-    }
+    //let bdyCross = testMesh.bdyverts.filter(vi => triangulation[4].verts.includes(vi));
+    //let bdyEdge = testMesh.bdyverts.filter(vi => !triangulation[4].verts.includes(vi));
+    //let fac = 8; // Inverse of how concave crossing vertices should be imbedded
+    //for (let bci of bdyCross) {
+    //    K[bci] = -Math.PI/fac;
+    //}
+    //for (let bei of bdyEdge) {
+    //    K[bei] = (2*Math.PI + bdyCross.length*Math.PI/fac)/bdyEdge.length;
+    //}
+    console.log(K);
 
-    let flat_poly = cpmetric.newton(K, 1, 5e-2);
+    let flat_poly = cpmetric.newton(K, 1, 1e-2);
+
+    console.log(flat_poly);
 
     let embedding = embed_faces(flat_poly);
+
+    console.log(embedding);
 
     postMessage({
         flat_poly: flat_poly,
         embedding: embedding,
-        m4v: m4v});
+        m4v: m4v,
+        conv: triangulation[4]});
     console.log("Computation finished in: " + (Date.now() - tstart) + " milliseconds");
 }
