@@ -57,16 +57,16 @@ class MeshDraw {
     constructor(div) {
         this.nodes = [];
         this.edges = {};
-        /*this.pan = svgPanZoom(div, {
+        this.pan = svgPanZoom(div, {
             minZoom: 0.1,
             maxZoom: 50,
-            fit: false,
+            contain: true,
             controlIconsEnabled: true,
             zoomScaleSensitivity: 1
         });
 
-        this.draw = Snap(document.querySelector(div).children[0]);*/
-        this.draw = Snap(div);
+        this.draw = Snap(document.querySelector(div).children[0]);
+        //this.draw = Snap(div);
         this.edgeG = this.draw.g();
         this.nodeG = this.draw.g();
         this.knotG = this.draw.g();
@@ -122,9 +122,11 @@ class MeshDraw {
         }
 
         //console.log(this.map4v.faces);
-        for (let fi in this.map4v.faces) {
+        for (let idx in conv.faces) {
             //console.log(fi);
-            //let mesh_face = this.add_face(parseInt(fi));
+            if(conv.faces[idx].length > 0) {
+                let mesh_face = this.add_face(conv.faces[idx][0], parseInt(idx));
+            }
         }
 
         let ci = 0;
@@ -157,10 +159,10 @@ class MeshDraw {
         return edge;
     }
 
-    add_face(i) {
-        let face_node = this.nodes[this.map4v.nv+this.map4v.ne+i];
+    add_face(i, fi) {
+        let face_node = this.nodes[i];
         face_node.svg.addClass("face");
-        face_node.set_obj(i, this.map4v.faces[i]);
+        face_node.set_obj(i, this.map4v.faces[fi]);
     }
 
     add_component(component, map4v, points) {
@@ -192,7 +194,7 @@ class MeshDraw {
         // Close the path
         path.push(path[0]);
 
-        console.log(path);
+        //console.log(path);
 
         let pathStr = "M";
         pathStr += path[0].join(",");
@@ -221,7 +223,10 @@ let meshDraw = new MeshDraw("#knot-draw");
 let cpWorker = new Worker("js/cp_worker.js");
 
 function drawMapAsync(sigma, cross_bend=8) {
-    cpWorker.postMessage([sigma, cross_bend]);
+    cpWorker.postMessage({
+        function: "setLinkDiagram",
+        arguments: [sigma, cross_bend]
+    });
 }
 
 cpWorker.onmessage = function(ev) {

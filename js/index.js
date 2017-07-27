@@ -75,15 +75,16 @@ var MeshDraw = function () {
 
         this.nodes = [];
         this.edges = {};
-        /*this.pan = svgPanZoom(div, {
+        this.pan = svgPanZoom(div, {
             minZoom: 0.1,
             maxZoom: 50,
-            fit: false,
+            contain: true,
             controlIconsEnabled: true,
             zoomScaleSensitivity: 1
         });
-         this.draw = Snap(document.querySelector(div).children[0]);*/
-        this.draw = Snap(div);
+
+        this.draw = Snap(document.querySelector(div).children[0]);
+        //this.draw = Snap(div);
         this.edgeG = this.draw.g();
         this.nodeG = this.draw.g();
         this.knotG = this.draw.g();
@@ -164,9 +165,11 @@ var MeshDraw = function () {
                 }
             }
 
-            for (var fi in this.map4v.faces) {
+            for (var idx in conv.faces) {
                 //console.log(fi);
-                //let mesh_face = this.add_face(parseInt(fi));
+                if (conv.faces[idx].length > 0) {
+                    var mesh_face = this.add_face(conv.faces[idx][0], parseInt(idx));
+                }
             }
 
             var ci = 0;
@@ -224,10 +227,10 @@ var MeshDraw = function () {
         }
     }, {
         key: 'add_face',
-        value: function add_face(i) {
-            var face_node = this.nodes[this.map4v.nv + this.map4v.ne + i];
+        value: function add_face(i, fi) {
+            var face_node = this.nodes[i];
             face_node.svg.addClass("face");
-            face_node.set_obj(i, this.map4v.faces[i]);
+            face_node.set_obj(i, this.map4v.faces[fi]);
         }
     }, {
         key: 'add_component',
@@ -260,7 +263,7 @@ var MeshDraw = function () {
             // Close the path
             path.push(path[0]);
 
-            console.log(path);
+            //console.log(path);
 
             var pathStr = "M";
             pathStr += path[0].join(",");
@@ -316,7 +319,10 @@ var cpWorker = new Worker("js/cp_worker.js");
 function drawMapAsync(sigma) {
     var cross_bend = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 8;
 
-    cpWorker.postMessage([sigma, cross_bend]);
+    cpWorker.postMessage({
+        function: "setLinkDiagram",
+        arguments: [sigma, cross_bend]
+    });
 }
 
 cpWorker.onmessage = function (ev) {

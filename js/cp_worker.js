@@ -9,7 +9,7 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
 importScripts('lalolib/lalolib.js');
 
 function least_squares(X /* : Matrix */, Y /* : Matrix */) /* : least_squares */{
-    //console.log("X", X, inv(X), det(X), Y);
+    //console.log("X", X, inv(X), det(X), qr(X, true), Y);
     var betaHat = solve(mul(X, transpose(X)), mul(X, Y));
 
     return betaHat;
@@ -96,6 +96,8 @@ var LinkShadow = function () {
                 arcs: []
             };
 
+            console.log(this.faces);
+
             var _iteratorNormalCompletion = true;
             var _didIteratorError = false;
             var _iteratorError = undefined;
@@ -123,9 +125,15 @@ var LinkShadow = function () {
                             tri_comp.push(tri_map.verts[this.out_vert_i(_arc3)]);
 
                             // Add a new vert for the edge of this arc
+                            //console.log(this.faces[arc.face].length);
+                            //if (this.faces[arc.face].length <= 2 ||
+                            //    this.faces[(this.edges[arc.edge][(arc.edgepos+1)%2]).face].length <= 2) {
                             tri_map.edges[_arc3.edge] = [verts.length];
                             tri_comp.push(verts.length);
                             verts.push(verts.length);
+                            //} else {
+                            //    tri_map.edges[arc.edge] = [];
+                            //}
 
                             if (this.out_vert_i(_arc3) == this.in_vert_i(_arc3)) {
                                 // This arc corresponds to a monogon, and so we must add two
@@ -234,15 +242,15 @@ var LinkShadow = function () {
 
                         // Add scaffolding for this arc
                         var pre_arc = this.verts[_arc.vert][(_arc.vertpos + 3) % 4];
-                        console.log("!!", _arc, tri_map.edges[_arc.edge], tri_map.arcs[_arc.index]);
-                        console.log(pre_arc);
+                        //console.log("!!", arc, tri_map.edges[arc.edge], tri_map.arcs[arc.index]);
+                        //console.log(pre_arc);
                         edges.push([tri_map.arcs[_arc.index][0], tri_map.arcs[pre_arc.index][0]]);
 
                         triangles.push([tri_map.arcs[_arc.index][0], tri_map.arcs[pre_arc.index][0], tri_map.verts[_arc.vert]]);
 
                         // Add scaffolding for opposite arc
                         var o_arc = this.verts[_arc.vert][(_arc.vertpos + 2) % 4];
-                        console.log("~~", o_arc);
+                        //console.log("~~", o_arc);
                         pre_arc = this.verts[o_arc.vert][(o_arc.vertpos + 3) % 4];
                         edges.push([tri_map.arcs[o_arc.index][0], tri_map.arcs[pre_arc.index][0]]);
 
@@ -283,6 +291,8 @@ var LinkShadow = function () {
                         // This arcs triangulation vertices need to be added, too
                         tri_face.splice.apply(tri_face, [tri_face.length, 0].concat(_toConsumableArray(tri_map.arcs[_arc2.index])));
                     }
+
+                    //console.log(tri_face);
                 } catch (err) {
                     _didIteratorError4 = true;
                     _iteratorError4 = err;
@@ -297,8 +307,6 @@ var LinkShadow = function () {
                         }
                     }
                 }
-
-                console.log(tri_face);
 
                 if (fi == bdry_face_i) {
                     // This face is the boundary face and must be processed
@@ -434,6 +442,7 @@ var LinkShadow = function () {
                 do {
                     left_arcs.delete(arc);
                     face.push(arc);
+                    arc.face = this.faces.length;
                     //console.log(arc);
 
                     var o_arc = this.edges[arc.edge][(arc.edgepos + 1) % 2];
@@ -822,21 +831,19 @@ var DiscreteRiemannMetric = function () {
 
             if (target_K == null) {}
 
-            var g = new DiscreteRiemannMetric(this.mesh, this.gamma, this.phi);
-
-            var K = g.K;
+            var K = this.K;
             var DeltaK = sub(target_K, K);
 
             var _failsafe = 0;
-            while (max(abs(DeltaK)) > thresh) {
+            while (this.loss(target_K) > thresh) {
                 var H = this.hessian();
                 var deltau = least_squares(H, DeltaK);
 
-                g.u = sub(g.u, mul(dt, deltau));
+                this.u = sub(this.u, mul(dt, deltau));
 
-                g.update();
+                this.update();
 
-                K = g.K;
+                K = this.K;
                 DeltaK = sub(target_K, K);
 
                 //console.log(math.max(math.abs(DeltaK)));
@@ -844,11 +851,28 @@ var DiscreteRiemannMetric = function () {
                 _failsafe += 1;
                 if (_failsafe > 1000) {
                     console.log("Took too long to flatten; abort!");
-                    return g;
                 }
             }
+        }
+    }, {
+        key: "newton_step",
+        value: function newton_step() {
+            var target_K = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : null;
+            var dt = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 0.05;
 
-            return g;
+            var DeltaK = sub(target_K, this.K);
+
+            var H = this.hessian();
+            var deltau = least_squares(H, DeltaK);
+
+            this.u = sub(this.u, mul(dt, deltau));
+
+            this.update();
+        }
+    }, {
+        key: "loss",
+        value: function loss(target_K) {
+            return max(abs(sub(target_K, this.K)));
         }
     }, {
         key: "tau2",
@@ -916,6 +940,7 @@ var DiscreteRiemannMetric = function () {
                         }
                     }
                 }
+                //console.log(det(H));
             } catch (err) {
                 _didIteratorError12 = true;
                 _iteratorError12 = err;
@@ -931,7 +956,6 @@ var DiscreteRiemannMetric = function () {
                 }
             }
 
-            console.log(det(H));
             return H;
         }
     }], [{
@@ -1159,7 +1183,6 @@ function orient_faces(faces) {
             }
         }
     }
-
     return oriented;
 }
 
@@ -1173,7 +1196,8 @@ function embed_faces(g) {
     var phi = {};
     var pi = Math.PI;
 
-    var faces = orient_faces(mesh.faces);
+    //let faces = orient_faces(mesh.faces);
+    var faces = mesh.faces;
     var to_embed = faces.slice();
     var embed_queue = new Set();
 
@@ -1328,105 +1352,124 @@ function embed_faces(g) {
     return [x, faces, phi];
 }
 
+function sleep(millis) {
+    var date = new Date();
+    var curDate = null;
+    do {
+        curDate = new Date();
+    } while (curDate - date < millis);
+}
+
+var workerFunctions = {
+    setLinkDiagram: function setLinkDiagram(sigma, cross_bend) {
+        self.shadow = new LinkShadow(sigma);
+
+        self.trign = self.shadow.triangulate();
+
+        var ofaces = orient_faces(self.trign[3]);
+        var testMesh = new TriangleMesh(self.trign[0], self.trign[1], self.trign[2], ofaces);
+
+        var cpmetric = DiscreteRiemannMetric.from_triangle_mesh(testMesh);
+
+        self.tgt_K = zeros(testMesh.verts.length, 1);
+
+        // Set boundary crossing target curvature
+        var bdyCross = testMesh.bdyverts.filter(function (vi) {
+            return self.trign[4].verts.includes(vi);
+        });
+        var bdyEdge = testMesh.bdyverts.filter(function (vi) {
+            return !self.trign[4].verts.includes(vi);
+        });
+
+        var fac = 8; // Inverse of how concave crossing vertices should be imbedded
+        var _iteratorNormalCompletion20 = true;
+        var _didIteratorError20 = false;
+        var _iteratorError20 = undefined;
+
+        try {
+            for (var _iterator20 = bdyCross[Symbol.iterator](), _step20; !(_iteratorNormalCompletion20 = (_step20 = _iterator20.next()).done); _iteratorNormalCompletion20 = true) {
+                var bci = _step20.value;
+
+                self.tgt_K[bci] = -Math.PI / fac;
+            }
+        } catch (err) {
+            _didIteratorError20 = true;
+            _iteratorError20 = err;
+        } finally {
+            try {
+                if (!_iteratorNormalCompletion20 && _iterator20.return) {
+                    _iterator20.return();
+                }
+            } finally {
+                if (_didIteratorError20) {
+                    throw _iteratorError20;
+                }
+            }
+        }
+
+        var _iteratorNormalCompletion21 = true;
+        var _didIteratorError21 = false;
+        var _iteratorError21 = undefined;
+
+        try {
+            for (var _iterator21 = bdyEdge[Symbol.iterator](), _step21; !(_iteratorNormalCompletion21 = (_step21 = _iterator21.next()).done); _iteratorNormalCompletion21 = true) {
+                var bei = _step21.value;
+
+                self.tgt_K[bei] = (2 * Math.PI + bdyCross.length * Math.PI / fac) / bdyEdge.length;
+            }
+        } catch (err) {
+            _didIteratorError21 = true;
+            _iteratorError21 = err;
+        } finally {
+            try {
+                if (!_iteratorNormalCompletion21 && _iterator21.return) {
+                    _iterator21.return();
+                }
+            } finally {
+                if (_didIteratorError21) {
+                    throw _iteratorError21;
+                }
+            }
+        }
+
+        self.flat_poly = cpmetric;
+
+        workerFunctions.embedDiagram();
+    },
+
+    embedDiagram: function embedDiagram() {
+        var tstart = Date.now();
+
+        var thresh = 5e-10;
+        var embedding = embed_faces(self.flat_poly);
+
+        postMessage({
+            flat_poly: self.flat_poly,
+            embedding: embedding,
+            m4v: self.shadow,
+            conv: self.trign[4] });
+
+        sleep(20);
+
+        while (self.flat_poly.loss(self.tgt_K) > thresh) {
+            self.flat_poly.newton_step(self.tgt_K, 1);
+
+            embedding = embed_faces(self.flat_poly);
+
+            postMessage({
+                flat_poly: self.flat_poly,
+                embedding: embedding,
+                m4v: self.shadow,
+                conv: self.trign[4] });
+
+            sleep(20);
+        }
+
+        console.log("Computation finished in: " + (Date.now() - tstart) + " milliseconds");
+    }
+};
+
 onmessage = function onmessage(e) {
-    var sigma = e.data[0];
-    var cross_bend = e.data[1];
-    var tstart = Date.now();
-
-    var m4v = new LinkShadow(sigma);
-
-    //let triangulation = m4v.old_triangulate();
-    var triangulation = m4v.triangulate();
-
-    console.log(triangulation);
-    //console.log(m4v.old_triangulate());
-
-    var testMesh = new TriangleMesh(triangulation[0], triangulation[1], triangulation[2], triangulation[3]);
-
-    //console.log(testMesh);
-
-    var cpmetric = DiscreteRiemannMetric.from_triangle_mesh(testMesh);
-
-    var K = zeros(testMesh.verts.length, 1);
-    //for (let bi of testMesh.bdyverts) {
-    //    K[bi] = 2*Math.PI/testMesh.bdyverts.length;
-    //}
-    console.log(K);
-
-    // Set boundary crossing target curvature
-    var bdyCross = testMesh.bdyverts.filter(function (vi) {
-        return triangulation[4].verts.includes(vi);
-    });
-    var bdyEdge = testMesh.bdyverts.filter(function (vi) {
-        return !triangulation[4].verts.includes(vi);
-    });
-    console.log(bdyCross, bdyEdge);
-    var fac = 16; // Inverse of how concave crossing vertices should be imbedded
-    var _iteratorNormalCompletion20 = true;
-    var _didIteratorError20 = false;
-    var _iteratorError20 = undefined;
-
-    try {
-        for (var _iterator20 = bdyCross[Symbol.iterator](), _step20; !(_iteratorNormalCompletion20 = (_step20 = _iterator20.next()).done); _iteratorNormalCompletion20 = true) {
-            var bci = _step20.value;
-
-            K[bci] = -Math.PI / fac;
-        }
-    } catch (err) {
-        _didIteratorError20 = true;
-        _iteratorError20 = err;
-    } finally {
-        try {
-            if (!_iteratorNormalCompletion20 && _iterator20.return) {
-                _iterator20.return();
-            }
-        } finally {
-            if (_didIteratorError20) {
-                throw _iteratorError20;
-            }
-        }
-    }
-
-    var _iteratorNormalCompletion21 = true;
-    var _didIteratorError21 = false;
-    var _iteratorError21 = undefined;
-
-    try {
-        for (var _iterator21 = bdyEdge[Symbol.iterator](), _step21; !(_iteratorNormalCompletion21 = (_step21 = _iterator21.next()).done); _iteratorNormalCompletion21 = true) {
-            var bei = _step21.value;
-
-            K[bei] = (2 * Math.PI + bdyCross.length * Math.PI / fac) / bdyEdge.length;
-        }
-    } catch (err) {
-        _didIteratorError21 = true;
-        _iteratorError21 = err;
-    } finally {
-        try {
-            if (!_iteratorNormalCompletion21 && _iterator21.return) {
-                _iterator21.return();
-            }
-        } finally {
-            if (_didIteratorError21) {
-                throw _iteratorError21;
-            }
-        }
-    }
-
-    console.log(K);
-
-    var flat_poly = cpmetric.newton(K, 1, 5e-2);
-
-    //console.log(flat_poly);
-
-    var embedding = embed_faces(flat_poly);
-
-    //console.log(embedding);
-
-    postMessage({
-        flat_poly: flat_poly,
-        embedding: embedding,
-        m4v: m4v,
-        conv: triangulation[4] });
-    console.log("Computation finished in: " + (Date.now() - tstart) + " milliseconds");
+    workerFunctions[e.data.function].apply(workerFunctions, _toConsumableArray(e.data.arguments));
 };
 //# sourceMappingURL=cp_worker.js.map

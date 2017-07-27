@@ -6655,7 +6655,7 @@ function solveGaussianElimination(Aorig, borig) {
 		}
 		if ( isZero( Aimaxk ) ) {
 			console.log("** Warning in solve(A,b), A is square but singular, switching from Gaussian elimination to QR method.");
-			//return solveWithQRcolumnpivoting(A,b);
+			return solveWithQRcolumnpivoting(Aorig,b);
 		} 
 		
 		if ( imax != k ) {

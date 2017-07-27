@@ -1,7 +1,7 @@
 importScripts('lalolib/lalolib.js');
 
 function least_squares(X /* : Matrix */, Y /* : Matrix */) /* : least_squares */ {
-    //console.log("X", X, inv(X), det(X), Y);
+    //console.log("X", X, inv(X), det(X), qr(X, true), Y);
     let betaHat = solve(mul(X, transpose(X)), mul(X, Y));
 
     return betaHat;
@@ -80,6 +80,8 @@ class LinkShadow {
             arcs : []
         };
 
+        console.log(this.faces);
+
         for (let component of this.components) {
             let tri_comp = [];
             for (let arc of component) {
@@ -93,9 +95,15 @@ class LinkShadow {
                 tri_comp.push(tri_map.verts[this.out_vert_i(arc)]);
 
                 // Add a new vert for the edge of this arc
-                tri_map.edges[arc.edge] = [verts.length];
-                tri_comp.push(verts.length);
-                verts.push(verts.length);
+                //console.log(this.faces[arc.face].length);
+                //if (this.faces[arc.face].length <= 2 ||
+                //    this.faces[(this.edges[arc.edge][(arc.edgepos+1)%2]).face].length <= 2) {
+                    tri_map.edges[arc.edge] = [verts.length];
+                    tri_comp.push(verts.length);
+                    verts.push(verts.length);
+                //} else {
+                //    tri_map.edges[arc.edge] = [];
+                //}
 
                 if (this.out_vert_i(arc) == this.in_vert_i(arc)) {
                     // This arc corresponds to a monogon, and so we must add two
@@ -146,8 +154,8 @@ class LinkShadow {
             for (let arc of isthmus_arcs) {
                 // Add scaffolding for this arc
                 let pre_arc = this.verts[arc.vert][(arc.vertpos+3)%4];
-                console.log("!!", arc, tri_map.edges[arc.edge], tri_map.arcs[arc.index]);
-                console.log(pre_arc);
+                //console.log("!!", arc, tri_map.edges[arc.edge], tri_map.arcs[arc.index]);
+                //console.log(pre_arc);
                 edges.push([tri_map.arcs[arc.index][0],
                             tri_map.arcs[pre_arc.index][0]]);
 
@@ -157,7 +165,7 @@ class LinkShadow {
 
                 // Add scaffolding for opposite arc
                 let o_arc = this.verts[arc.vert][(arc.vertpos+2)%4];
-                console.log("~~", o_arc);
+                //console.log("~~", o_arc);
                 pre_arc = this.verts[o_arc.vert][(o_arc.vertpos+3)%4];
                 edges.push([tri_map.arcs[o_arc.index][0],
                             tri_map.arcs[pre_arc.index][0]]);
@@ -180,7 +188,7 @@ class LinkShadow {
                 tri_face.splice(tri_face.length, 0, ...tri_map.arcs[arc.index]);
             }
 
-            console.log(tri_face);
+            //console.log(tri_face);
 
             if (fi == bdry_face_i) {
                 // This face is the boundary face and must be processed
@@ -288,6 +296,7 @@ class LinkShadow {
             do {
                 left_arcs.delete(arc);
                 face.push(arc);
+                arc.face = this.faces.length;
                 //console.log(arc);
 
                 let o_arc = this.edges[arc.edge][(arc.edgepos+1)%2];
@@ -529,21 +538,19 @@ class DiscreteRiemannMetric {
 
         }
 
-        let g = new DiscreteRiemannMetric(this.mesh, this.gamma, this.phi);
-
-        let K = g.K;
+        let K = this.K;
         let DeltaK = sub(target_K, K);
 
         let _failsafe = 0;
-        while (max(abs(DeltaK)) > thresh){
+        while (this.loss(target_K) > thresh){
             let H = this.hessian();
             let deltau = least_squares(H, DeltaK);
 
-            g.u = sub(g.u, mul(dt, deltau));
+            this.u = sub(this.u, mul(dt, deltau));
 
-            g.update();
+            this.update();
 
-            K = g.K;
+            K = this.K;
             DeltaK = sub(target_K, K);
 
             //console.log(math.max(math.abs(DeltaK)));
@@ -551,11 +558,25 @@ class DiscreteRiemannMetric {
             _failsafe += 1;
             if (_failsafe > 1000) {
                 console.log("Took too long to flatten; abort!");
-                return g;
             }
         }
 
-        return g;
+    }
+
+    newton_step(target_K=null, dt=0.05) {
+        let DeltaK = sub(target_K, this.K);
+
+        let H = this.hessian();
+        let deltau = least_squares(H, DeltaK);
+
+        this.u = sub(this.u, mul(dt, deltau));
+
+        this.update();
+    }
+
+
+    loss(target_K) {
+        return max(abs(sub(target_K, this.K)));
     }
 
     tau2(l_jk, g_j, g_k) {
@@ -615,7 +636,7 @@ class DiscreteRiemannMetric {
                 }
             }
         }
-        console.log(det(H));
+        //console.log(det(H));
         return H;
     }
 }
@@ -718,7 +739,6 @@ function orient_faces(faces) {
         }
 
     }
-
     return oriented;
 }
 
@@ -732,7 +752,8 @@ function embed_faces(g) {
     let phi = {};
     let pi = Math.PI;
 
-    let faces = orient_faces(mesh.faces);
+    //let faces = orient_faces(mesh.faces);
+    let faces = mesh.faces;
     let to_embed = faces.slice();
     let embed_queue = new Set();
 
@@ -842,58 +863,79 @@ function embed_faces(g) {
     return [x, faces, phi];
 }
 
+function sleep(millis)
+{
+    var date = new Date();
+    var curDate = null;
+    do { curDate = new Date(); }
+    while(curDate-date < millis);
+}
+
+
+var workerFunctions = {
+    setLinkDiagram: function(sigma, cross_bend) {
+        self.shadow = new LinkShadow(sigma);
+
+        self.trign = self.shadow.triangulate();
+
+        let ofaces = orient_faces(self.trign[3]);
+        let testMesh = new TriangleMesh(
+            self.trign[0], self.trign[1], self.trign[2], ofaces
+        );
+
+        let cpmetric = DiscreteRiemannMetric.from_triangle_mesh(testMesh);
+
+        self.tgt_K = zeros(testMesh.verts.length, 1);
+
+        // Set boundary crossing target curvature
+        let bdyCross = testMesh.bdyverts.filter(vi => self.trign[4].verts.includes(vi));
+        let bdyEdge = testMesh.bdyverts.filter(vi => !self.trign[4].verts.includes(vi));
+
+        let fac = 8; // Inverse of how concave crossing vertices should be imbedded
+        for (let bci of bdyCross) {
+            self.tgt_K[bci] = -Math.PI/fac;
+        }
+        for (let bei of bdyEdge) {
+            self.tgt_K[bei] = (2*Math.PI + bdyCross.length*Math.PI/fac)/bdyEdge.length;
+        }
+
+        self.flat_poly = cpmetric;
+
+        workerFunctions.embedDiagram();
+    },
+
+    embedDiagram: function() {
+        let tstart = Date.now();
+
+        let thresh = 5e-10;
+        let embedding = embed_faces(self.flat_poly);
+
+        postMessage({
+            flat_poly: self.flat_poly,
+            embedding: embedding,
+            m4v: self.shadow,
+            conv: self.trign[4]});
+
+        sleep(20);
+
+        while(self.flat_poly.loss(self.tgt_K) > thresh) {
+            self.flat_poly.newton_step(self.tgt_K, 1);
+
+            embedding = embed_faces(self.flat_poly);
+
+            postMessage({
+                flat_poly: self.flat_poly,
+                embedding: embedding,
+                m4v: self.shadow,
+                conv: self.trign[4]});
+
+            sleep(20);
+        }
+
+        console.log("Computation finished in: " + (Date.now() - tstart) + " milliseconds");
+    }
+}
+
 onmessage = function(e) {
-    let sigma = e.data[0];
-    let cross_bend = e.data[1];
-    var tstart = Date.now();
-
-    let m4v = new LinkShadow(sigma);
-
-    //let triangulation = m4v.old_triangulate();
-    let triangulation = m4v.triangulate();
-
-    console.log(triangulation);
-    //console.log(m4v.old_triangulate());
-
-    let testMesh = new TriangleMesh(
-        triangulation[0], triangulation[1], triangulation[2], triangulation[3]
-    );
-
-    //console.log(testMesh);
-
-    let cpmetric = DiscreteRiemannMetric.from_triangle_mesh(testMesh);
-
-    let K = zeros(testMesh.verts.length, 1);
-    //for (let bi of testMesh.bdyverts) {
-    //    K[bi] = 2*Math.PI/testMesh.bdyverts.length;
-    //}
-    console.log(K);
-
-    // Set boundary crossing target curvature
-    let bdyCross = testMesh.bdyverts.filter(vi => triangulation[4].verts.includes(vi));
-    let bdyEdge = testMesh.bdyverts.filter(vi => !triangulation[4].verts.includes(vi));
-    console.log(bdyCross, bdyEdge);
-    let fac = 16; // Inverse of how concave crossing vertices should be imbedded
-    for (let bci of bdyCross) {
-       K[bci] = -Math.PI/fac;
-    }
-    for (let bei of bdyEdge) {
-       K[bei] = (2*Math.PI + bdyCross.length*Math.PI/fac)/bdyEdge.length;
-    }
-    console.log(K);
-
-    let flat_poly = cpmetric.newton(K, 1, 5e-2);
-
-    //console.log(flat_poly);
-
-    let embedding = embed_faces(flat_poly);
-
-    //console.log(embedding);
-
-    postMessage({
-        flat_poly: flat_poly,
-        embedding: embedding,
-        m4v: m4v,
-        conv: triangulation[4]});
-    console.log("Computation finished in: " + (Date.now() - tstart) + " milliseconds");
+    workerFunctions[e.data.function](...e.data.arguments);
 }
