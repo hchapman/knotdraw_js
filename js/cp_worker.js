@@ -1444,10 +1444,13 @@ var workerFunctions = {
         var embedding = embed_faces(self.flat_poly);
 
         postMessage({
-            flat_poly: self.flat_poly,
-            embedding: embedding,
-            m4v: self.shadow,
-            conv: self.trign[4] });
+            function: "setEmbedding",
+            arguments: {
+                flat_poly: self.flat_poly,
+                embedding: embedding,
+                m4v: self.shadow,
+                conv: self.trign[4] }
+        });
 
         sleep(20);
 
@@ -1457,10 +1460,13 @@ var workerFunctions = {
             embedding = embed_faces(self.flat_poly);
 
             postMessage({
-                flat_poly: self.flat_poly,
-                embedding: embedding,
-                m4v: self.shadow,
-                conv: self.trign[4] });
+                function: "setEmbedding",
+                arguments: {
+                    flat_poly: self.flat_poly,
+                    embedding: embedding,
+                    m4v: self.shadow,
+                    conv: self.trign[4] }
+            });
 
             sleep(20);
         }

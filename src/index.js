@@ -31,8 +31,24 @@ class MeshNode {
         this.obj = obj;
     }
 
-    set_r(r) {
-        this.svg.attr({'r': r});
+    move(x, y, anim_ms=0) {
+        if (anim_ms == 0) {
+            // Do not animate
+            this.svg.attr({'cx': x, 'cy': y});
+        } else {
+            // Animate the motion
+            this.svg.animate({'cx': x, 'cy': y},
+                             anim_ms, mina.bounce);
+        }
+    }
+
+    set_r(r, anim_ms=0) {
+        if (anim_ms == 0) {
+            this.svg.attr({'r': r});
+        } else {
+            this.svg.animate({'r': r},
+                             anim_ms, mina.bounce);
+        }
     }
 
     x() {
@@ -57,7 +73,7 @@ class MeshDraw {
     constructor(div) {
         this.nodes = [];
         this.edges = {};
-        this.pan = svgPanZoom(div, {
+        /*this.pan = svgPanZoom(div, {
             minZoom: 0.1,
             maxZoom: 50,
             contain: true,
@@ -65,8 +81,8 @@ class MeshDraw {
             zoomScaleSensitivity: 1
         });
 
-        this.draw = Snap(document.querySelector(div).children[0]);
-        //this.draw = Snap(div);
+        this.draw = Snap(document.querySelector(div).children[0]);*/
+        this.draw = Snap(div);
         this.edgeG = this.draw.g();
         this.nodeG = this.draw.g();
         this.knotG = this.draw.g();
@@ -107,6 +123,62 @@ class MeshDraw {
         //console.log(points);
         for (let i = 0; i < points.m; i++) {
             let node = this.add_node(i, points.val[i*points.n], points.val[i*points.n+1]);
+            node.set_r(this.g.gamma[this.nodes.length-1]);
+        }
+
+        for (let comp of conv.comps) {
+            for (let pi = 0; pi < comp.length; pi++) {
+                let edge = [comp[pi], comp[(pi+1)%comp.length]];
+                //console.log(edge);
+                if (edge[0] in this.nodes && edge[1] in this.nodes) {
+                    let mesh_edge = this.add_edge(edge[0], edge[1]);
+                    mesh_edge.svg.addClass('edge');
+                }
+            }
+        }
+
+        //console.log(this.map4v.faces);
+        for (let idx in conv.faces) {
+            //console.log(fi);
+            if(conv.faces[idx].length > 0) {
+                let mesh_face = this.add_face(conv.faces[idx][0], parseInt(idx));
+            }
+        }
+
+        let ci = 0;
+        for (let component of conv.comps) {
+            let knot = this.add_component(component, map4v, points);
+            knot.addClass('q'+ci+"-9");
+            ci += 1;
+        }
+    }
+
+    update_embedding(g /*metric*/, embedding, map4v /*original map*/, conv, anim_ms=0) {
+        let points = embedding[0];
+        let faces = embedding[1];
+        let phi = embedding[2];
+        /* set the embedding */
+        this.g = g;
+        this.map4v = map4v;
+
+        // alter the viewbox to fit
+        let min_x = min(get(points, range(), 0));
+        let min_y = min(get(points, range(), 1));
+        let max_x = max(get(points, range(), 0));
+        let max_y = max(get(points, range(), 1));
+
+        let wid = max_x-min_x;
+        let hgt = max_y-min_y;
+
+        let dx = wid*0.05;
+        let dy = hgt*0.05;
+
+        this.draw.attr({viewBox: [min_x-dx, min_y-dy, wid+2*dx, hgt+2*dy].join(",")});
+
+        //console.log(points);
+        for (let i = 0; i < points.m; i++) {
+            let node = this.nodes[i];
+            node.move(i, points.val[i*points.n], points.val[i*points.n+1]);
             node.set_r(this.g.gamma[this.nodes.length-1]);
         }
 
@@ -229,10 +301,20 @@ function drawMapAsync(sigma, cross_bend=8) {
     });
 }
 
+var cpWorkerFunctions = {
+    setEmbedding: function(flat_poly, embedding, m4v, conv) {
+        meshDraw.clear();
+        meshDraw.set_embedding(flat_poly, embedding, m4v, conv);
+    },
+
+    updateEmbedding: function(flat_poly, embedding, m4v, conv) {
+        meshDraw.update_embedding(flat_poly, embedding, m4v, conv);
+    }
+}
+
 cpWorker.onmessage = function(ev) {
-    //console.log(ev.data.m4v);
-    meshDraw.clear();
-    meshDraw.set_embedding(ev.data.flat_poly, ev.data.embedding, ev.data.m4v, ev.data.conv);
+    console.log("hello", ev);
+    cpWorkerFunctions[ev.data.function].apply(this, ev.data.arguments);
 }
 
 // Trefoil

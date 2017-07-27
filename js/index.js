@@ -41,9 +41,28 @@ var MeshNode = function () {
             this.obj = obj;
         }
     }, {
+        key: 'move',
+        value: function move(x, y) {
+            var anim_ms = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : 0;
+
+            if (anim_ms == 0) {
+                // Do not animate
+                this.svg.attr({ 'cx': x, 'cy': y });
+            } else {
+                // Animate the motion
+                this.svg.animate({ 'cx': x, 'cy': y }, anim_ms, mina.bounce);
+            }
+        }
+    }, {
         key: 'set_r',
         value: function set_r(r) {
-            this.svg.attr({ 'r': r });
+            var anim_ms = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 0;
+
+            if (anim_ms == 0) {
+                this.svg.attr({ 'r': r });
+            } else {
+                this.svg.animate({ 'r': r }, anim_ms, mina.bounce);
+            }
         }
     }, {
         key: 'x',
@@ -75,16 +94,15 @@ var MeshDraw = function () {
 
         this.nodes = [];
         this.edges = {};
-        this.pan = svgPanZoom(div, {
+        /*this.pan = svgPanZoom(div, {
             minZoom: 0.1,
             maxZoom: 50,
             contain: true,
             controlIconsEnabled: true,
             zoomScaleSensitivity: 1
         });
-
-        this.draw = Snap(document.querySelector(div).children[0]);
-        //this.draw = Snap(div);
+         this.draw = Snap(document.querySelector(div).children[0]);*/
+        this.draw = Snap(div);
         this.edgeG = this.draw.g();
         this.nodeG = this.draw.g();
         this.knotG = this.draw.g();
@@ -201,6 +219,108 @@ var MeshDraw = function () {
             }
         }
     }, {
+        key: 'update_embedding',
+        value: function update_embedding(g /*metric*/, embedding, map4v /*original map*/, conv) {
+            var anim_ms = arguments.length > 4 && arguments[4] !== undefined ? arguments[4] : 0;
+
+            var points = embedding[0];
+            var faces = embedding[1];
+            var phi = embedding[2];
+            /* set the embedding */
+            this.g = g;
+            this.map4v = map4v;
+
+            // alter the viewbox to fit
+            var min_x = min(get(points, range(), 0));
+            var min_y = min(get(points, range(), 1));
+            var max_x = max(get(points, range(), 0));
+            var max_y = max(get(points, range(), 1));
+
+            var wid = max_x - min_x;
+            var hgt = max_y - min_y;
+
+            var dx = wid * 0.05;
+            var dy = hgt * 0.05;
+
+            this.draw.attr({ viewBox: [min_x - dx, min_y - dy, wid + 2 * dx, hgt + 2 * dy].join(",") });
+
+            //console.log(points);
+            for (var i = 0; i < points.m; i++) {
+                var node = this.nodes[i];
+                node.move(i, points.val[i * points.n], points.val[i * points.n + 1]);
+                node.set_r(this.g.gamma[this.nodes.length - 1]);
+            }
+
+            var _iteratorNormalCompletion3 = true;
+            var _didIteratorError3 = false;
+            var _iteratorError3 = undefined;
+
+            try {
+                for (var _iterator3 = conv.comps[Symbol.iterator](), _step3; !(_iteratorNormalCompletion3 = (_step3 = _iterator3.next()).done); _iteratorNormalCompletion3 = true) {
+                    var comp = _step3.value;
+
+                    for (var pi = 0; pi < comp.length; pi++) {
+                        var edge = [comp[pi], comp[(pi + 1) % comp.length]];
+                        //console.log(edge);
+                        if (edge[0] in this.nodes && edge[1] in this.nodes) {
+                            var mesh_edge = this.add_edge(edge[0], edge[1]);
+                            mesh_edge.svg.addClass('edge');
+                        }
+                    }
+                }
+
+                //console.log(this.map4v.faces);
+            } catch (err) {
+                _didIteratorError3 = true;
+                _iteratorError3 = err;
+            } finally {
+                try {
+                    if (!_iteratorNormalCompletion3 && _iterator3.return) {
+                        _iterator3.return();
+                    }
+                } finally {
+                    if (_didIteratorError3) {
+                        throw _iteratorError3;
+                    }
+                }
+            }
+
+            for (var idx in conv.faces) {
+                //console.log(fi);
+                if (conv.faces[idx].length > 0) {
+                    var mesh_face = this.add_face(conv.faces[idx][0], parseInt(idx));
+                }
+            }
+
+            var ci = 0;
+            var _iteratorNormalCompletion4 = true;
+            var _didIteratorError4 = false;
+            var _iteratorError4 = undefined;
+
+            try {
+                for (var _iterator4 = conv.comps[Symbol.iterator](), _step4; !(_iteratorNormalCompletion4 = (_step4 = _iterator4.next()).done); _iteratorNormalCompletion4 = true) {
+                    var component = _step4.value;
+
+                    var knot = this.add_component(component, map4v, points);
+                    knot.addClass('q' + ci + "-9");
+                    ci += 1;
+                }
+            } catch (err) {
+                _didIteratorError4 = true;
+                _iteratorError4 = err;
+            } finally {
+                try {
+                    if (!_iteratorNormalCompletion4 && _iterator4.return) {
+                        _iterator4.return();
+                    }
+                } finally {
+                    if (_didIteratorError4) {
+                        throw _iteratorError4;
+                    }
+                }
+            }
+        }
+    }, {
         key: 'delete_face',
         value: function delete_face(i) {
             /* Deleting a face (valid curve-preserving faces to delete are a bigon *
@@ -269,13 +389,13 @@ var MeshDraw = function () {
             pathStr += path[0].join(",");
 
             var idx = 0;
-            var _iteratorNormalCompletion3 = true;
-            var _didIteratorError3 = false;
-            var _iteratorError3 = undefined;
+            var _iteratorNormalCompletion5 = true;
+            var _didIteratorError5 = false;
+            var _iteratorError5 = undefined;
 
             try {
-                for (var _iterator3 = path.slice(1)[Symbol.iterator](), _step3; !(_iteratorNormalCompletion3 = (_step3 = _iterator3.next()).done); _iteratorNormalCompletion3 = true) {
-                    var pt = _step3.value;
+                for (var _iterator5 = path.slice(1)[Symbol.iterator](), _step5; !(_iteratorNormalCompletion5 = (_step5 = _iterator5.next()).done); _iteratorNormalCompletion5 = true) {
+                    var pt = _step5.value;
 
                     if (idx % 2 == 0) {
                         pathStr += "Q";
@@ -288,16 +408,16 @@ var MeshDraw = function () {
 
                 //console.log(pathStr);
             } catch (err) {
-                _didIteratorError3 = true;
-                _iteratorError3 = err;
+                _didIteratorError5 = true;
+                _iteratorError5 = err;
             } finally {
                 try {
-                    if (!_iteratorNormalCompletion3 && _iterator3.return) {
-                        _iterator3.return();
+                    if (!_iteratorNormalCompletion5 && _iterator5.return) {
+                        _iterator5.return();
                     }
                 } finally {
-                    if (_didIteratorError3) {
-                        throw _iteratorError3;
+                    if (_didIteratorError5) {
+                        throw _iteratorError5;
                     }
                 }
             }
@@ -325,10 +445,20 @@ function drawMapAsync(sigma) {
     });
 }
 
+var cpWorkerFunctions = {
+    setEmbedding: function setEmbedding(flat_poly, embedding, m4v, conv) {
+        meshDraw.clear();
+        meshDraw.set_embedding(flat_poly, embedding, m4v, conv);
+    },
+
+    updateEmbedding: function updateEmbedding(flat_poly, embedding, m4v, conv) {
+        meshDraw.update_embedding(flat_poly, embedding, m4v, conv);
+    }
+};
+
 cpWorker.onmessage = function (ev) {
-    //console.log(ev.data.m4v);
-    meshDraw.clear();
-    meshDraw.set_embedding(ev.data.flat_poly, ev.data.embedding, ev.data.m4v, ev.data.conv);
+    console.log("hello", ev);
+    cpWorkerFunctions[ev.data.function].apply(this, ev.data.arguments);
 };
 
 // Trefoil
