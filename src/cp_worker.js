@@ -816,7 +816,7 @@ function embed_faces(g) {
             k = F[(F.indexOf(i)+1)%3];
             j = e[0], i = e[1];
         } else {
-            k = F[(F.indexOf(i)+2)%3]
+            k = F[(F.indexOf(i)+2)%3];
         }
 
         //console.log(F, e, i, j, k);
@@ -912,30 +912,35 @@ var workerFunctions = {
 
         postMessage({
             function: "setEmbedding",
-            arguments: {
-                flat_poly: self.flat_poly,
-                embedding: embedding,
-                m4v: self.shadow,
-                conv: self.trign[4]}
+            arguments: [
+                self.flat_poly,
+                embedding,
+                self.shadow,
+                self.trign[4]]
         });
 
-        sleep(20);
+        let curDate;
+        do { curDate = Date.now(); }
+        while( curDate-tstart < 100);
 
         while(self.flat_poly.loss(self.tgt_K) > thresh) {
+            let procStart = Date.now();
+
             self.flat_poly.newton_step(self.tgt_K, 1);
 
             embedding = embed_faces(self.flat_poly);
 
             postMessage({
-                function: "setEmbedding",
-                arguments: {
-                    flat_poly: self.flat_poly,
-                    embedding: embedding,
-                    m4v: self.shadow,
-                    conv: self.trign[4]}
+                function: "updateEmbedding",
+                arguments: [
+                    self.flat_poly,
+                    embedding,
+                    self.shadow,
+                    self.trign[4]]
             });
 
-            sleep(20);
+            do { curDate = Date.now(); }
+            while( curDate-procStart < 1000);
         }
 
         console.log("Computation finished in: " + (Date.now() - tstart) + " milliseconds");

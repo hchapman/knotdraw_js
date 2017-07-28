@@ -15,12 +15,23 @@ class MeshEdge {
         this.svg = this.parent.edgeG.line(start.x(), start.y(), stop.x(), stop.y());
         this.svg.addClass("scaffold");
     }
+
+    set_nodes(start, end, anim_ms=0) {
+        if (anim_ms == 0) {
+            this.svg.attr({'x1': start.x(), 'y1': start.y(), 'x2': end.x(), 'y2': end.y()});
+        } else {
+            this.svg.animate({'x1': start.x(), 'y1': start.y(), 'x2': end.x(), 'y2': end.y()},
+                             anim_ms);
+        }
+    }
 }
 
 class MeshNode {
     constructor(parent, x, y) {
         this.parent = parent;
         this.svg = this.parent.nodeG.circle(x, y, .3);
+        this._x = x;
+        this._y = y;
         this.svg.addClass('plnode');
 
         this.svg.node.addEventListener('click', this.onClick.bind(this));
@@ -31,14 +42,16 @@ class MeshNode {
         this.obj = obj;
     }
 
-    move(x, y, anim_ms=0) {
+    move(x, y, new_r=undefined, anim_ms=0) {
+        this._x = x;
+        this._y = y;
         if (anim_ms == 0) {
             // Do not animate
-            this.svg.attr({'cx': x, 'cy': y});
+            this.svg.attr({'cx': x, 'cy': y, 'r': new_r});
         } else {
             // Animate the motion
-            this.svg.animate({'cx': x, 'cy': y},
-                             anim_ms, mina.bounce);
+            this.svg.animate({'cx': x, 'cy': y, 'r': new_r},
+                             anim_ms);
         }
     }
 
@@ -47,16 +60,22 @@ class MeshNode {
             this.svg.attr({'r': r});
         } else {
             this.svg.animate({'r': r},
-                             anim_ms, mina.bounce);
+                             anim_ms);
         }
     }
 
-    x() {
+    cur_x() {
         return this.svg.attr('cx');
     }
+    x() {
+        return this._x;
+    }
 
-    y() {
+    cur_y() {
         return this.svg.attr('cy');
+    }
+    y() {
+        return this._y;
     }
 
     onClick(e) {
@@ -69,10 +88,78 @@ class MeshNode {
 
 }
 
+class CompEdgeNode {
+    constructor(parent, x, y, r) {
+        this.parent = parent;
+        this.svg = this.parent.knotG.circle(x, y, r);
+        this._x = x;
+        this._y = y;
+        this._r = r;
+
+        this.svg.node.addEventListener('click', this.onClick.bind(this));
+
+        this.dragging = false;
+    }
+
+    set_obj(i, obj) {
+        this.i = i;
+        this.obj = obj;
+    }
+
+    move(x, y, r, anim_ms=0) {
+        this._x = x;
+        this._y = y;
+        this._r = r;
+        if (anim_ms == 0) {
+            // Do not animate
+            this.svg.attr({'cx': x, 'cy': y, 'r': r});
+        } else {
+            // Animate the motion
+            this.svg.animate({'cx': x, 'cy': y, 'r': r},
+                             anim_ms);
+        }
+    }
+
+    set_r(r, anim_ms=0) {
+        if (anim_ms == 0) {
+            this.svg.attr({'r': r});
+        } else {
+            this.svg.animate({'r': r},
+                             anim_ms);
+        }
+    }
+
+    cur_x() {
+        return this.svg.attr('cx');
+    }
+    x() {
+        return this._x;
+    }
+
+    cur_y() {
+        return this.svg.attr('cy');
+    }
+    y() {
+        return this._y;
+    }
+
+    onClick(e) {
+        console.log(this);
+        console.log(this.obj);
+        if (this.obj.length == 2) {
+            this.parent.delete_face(this.i);
+        }
+    }
+}
+
 class MeshDraw {
     constructor(div) {
         this.nodes = [];
         this.edges = {};
+        this.comp_edgenodes = [];
+        this.comps = [];
+
+        this.anim_ms = 1000;
         /*this.pan = svgPanZoom(div, {
             minZoom: 0.1,
             maxZoom: 50,
@@ -92,6 +179,7 @@ class MeshDraw {
     clear() {
         this.nodes = [];
         this.edges = {};
+        this.comps = [];
 
         this.edgeG.clear();
         this.nodeG.clear();
@@ -147,8 +235,8 @@ class MeshDraw {
 
         let ci = 0;
         for (let component of conv.comps) {
-            let knot = this.add_component(component, map4v, points);
-            knot.addClass('q'+ci+"-9");
+            this.comps[ci] = this.add_component(component, map4v, points, conv);
+            this.comps[ci].addClass('q'+ci+"-9");
             ci += 1;
         }
     }
@@ -173,13 +261,16 @@ class MeshDraw {
         let dx = wid*0.05;
         let dy = hgt*0.05;
 
-        this.draw.attr({viewBox: [min_x-dx, min_y-dy, wid+2*dx, hgt+2*dy].join(",")});
+        Snap.animate(this.draw.attr("viewBox").vb.split(" "),
+                     [min_x-dx, min_y-dy, wid+2*dx, hgt+2*dy],
+                     (v) => { this.draw.attr("viewBox", v.join(" ")); },
+                     this.anim_ms);
 
         //console.log(points);
         for (let i = 0; i < points.m; i++) {
             let node = this.nodes[i];
-            node.move(i, points.val[i*points.n], points.val[i*points.n+1]);
-            node.set_r(this.g.gamma[this.nodes.length-1]);
+            node.move(points.val[i*points.n], points.val[i*points.n+1],
+                      this.g.gamma[i], this.anim_ms);
         }
 
         for (let comp of conv.comps) {
@@ -187,24 +278,14 @@ class MeshDraw {
                 let edge = [comp[pi], comp[(pi+1)%comp.length]];
                 //console.log(edge);
                 if (edge[0] in this.nodes && edge[1] in this.nodes) {
-                    let mesh_edge = this.add_edge(edge[0], edge[1]);
-                    mesh_edge.svg.addClass('edge');
+                    this.update_edge(edge[0], edge[1]);
                 }
-            }
-        }
-
-        //console.log(this.map4v.faces);
-        for (let idx in conv.faces) {
-            //console.log(fi);
-            if(conv.faces[idx].length > 0) {
-                let mesh_face = this.add_face(conv.faces[idx][0], parseInt(idx));
             }
         }
 
         let ci = 0;
         for (let component of conv.comps) {
-            let knot = this.add_component(component, map4v, points);
-            knot.addClass('q'+ci+"-9");
+            this.update_component(ci, component, map4v, points, conv);
             ci += 1;
         }
     }
@@ -231,14 +312,18 @@ class MeshDraw {
         return edge;
     }
 
+    update_edge(i, j) {
+        this.edges[[i,j]].set_nodes(this.nodes[i], this.nodes[j], this.anim_ms);
+    }
+
+
     add_face(i, fi) {
         let face_node = this.nodes[i];
         face_node.svg.addClass("face");
         face_node.set_obj(i, this.map4v.faces[fi]);
     }
 
-    add_component(component, map4v, points) {
-        // A path of the form anchor, control, anchor...
+    component_path_gen(component, map4v, points) {
         let path = [];
         let pts = points;
 
@@ -282,13 +367,91 @@ class MeshDraw {
             pathStr += pt.join(",");
         }
 
+        return [path, pathStr];
+    }
+
+    quadratic_segments(path) {
+        let slices = [];
+        for (let i = 0; i < path.length-4; i += 2) {
+            slices.push(path.slice(i, i+3));
+        }
+        slices.unshift(path.slice(path.length-3, path.length));
+
+        return slices;
+    }
+
+    quadratic_segments_to_cubic(segs) {
+        let csegs = [];
+        for (let seg of segs) {
+            let [q0, q1, q2] = seg;
+            csegs.push([q0,
+                        add(q0,mul(2/3 ,sub(q1,q0))),
+                        add(q2,mul(2/3, sub(q1,q2))),
+                        q2]);
+        }
+        return csegs;
+    }
+
+    add_component(component, map4v, points, conv) {
+        // A path of the form anchor, control, anchor...
+        let [path, pathStr] = this.component_path_gen(component, map4v, points);
+
+        let segs = this.quadratic_segments_to_cubic(this.quadratic_segments(path));
+
+        for (let si = 0; si < segs.length; si++) {
+            let tri_i = component[si];
+            if (!conv.edges.some(e => e.includes(tri_i))) {
+                continue;
+            }
+
+            let seg = segs[si];
+
+            let p = Snap.path.findDotsAtSegment(
+                seg[0][0], seg[0][1],
+                seg[1][0], seg[1][1],
+                seg[2][0], seg[2][1],
+                seg[3][0], seg[3][1], .5);
+            this.comp_edgenodes[tri_i] = new CompEdgeNode(this, p.x, p.y, this.g.gamma[tri_i]/2);
+        }
+
+
         //console.log(pathStr);
         let knot = this.knotG.path(pathStr+"Z");
         knot.addClass('knot');
 
         return knot;
     }
+
+    update_component(ci, component, map4v, points, conv) {
+        // A path of the form anchor, control, anchor...
+        let [path, pathStr] = this.component_path_gen(component, map4v, points);
+
+        let segs = this.quadratic_segments_to_cubic(this.quadratic_segments(path));
+
+        for (let si = 0; si < segs.length; si++) {
+            let tri_i = component[si];
+            if (!conv.edges.some(e => e.includes(tri_i))) {
+                continue;
+            }
+
+            let seg = segs[si];
+
+            let p = Snap.path.findDotsAtSegment(
+                seg[0][0], seg[0][1],
+                seg[1][0], seg[1][1],
+                seg[2][0], seg[2][1],
+                seg[3][0], seg[3][1], .5);
+
+            this.comp_edgenodes[tri_i].move(p.x, p.y, this.g.gamma[tri_i]/2, this.anim_ms);
+        }
+
+
+        //console.log(pathStr);
+        this.comps[ci].stop();
+        this.comps[ci].animate({"d": pathStr+"Z"}, this.anim_ms);
+    }
 }
+
 
 let meshDraw = new MeshDraw("#knot-draw");
 
@@ -327,7 +490,7 @@ cpWorker.onmessage = function(ev) {
 //let sigma = [[0, 1, 7, 2], [3, 6, 4, 5]];
 
 // Monogon in internal face
-//let sigma = [[1, 8, 2, 7], [0, 14, 15, 13], [3, 9, 4, 10], [5, 12, 6, 11]];
+let sigma = [[1, 8, 2, 7], [0, 14, 15, 13], [3, 9, 4, 10], [5, 12, 6, 11]];
 
 // Small 2-link
 //let sigma = [[1, 4, 2, 3], [0, 8, 7, 15], [5, 14, 6, 13], [9, 12, 10, 11]];
@@ -342,7 +505,7 @@ cpWorker.onmessage = function(ev) {
 //let sigma = [[0, 41, 99, 42], [1, 47, 2, 48], [3, 34, 4, 33], [5, 96, 6, 95], [7, 13, 8, 14], [9, 68, 10, 67], [11, 69, 12, 70], [15, 62, 16, 61], [17, 59, 18, 60], [19, 85, 20, 86], [21, 27, 22, 28], [23, 82, 24, 81], [25, 83, 26, 84], [29, 88, 30, 87], [31, 93, 32, 94], [35, 46, 36, 45], [37, 43, 38, 44], [39, 98, 40, 97], [49, 76, 50, 75], [51, 73, 52, 74], [53, 72, 54, 71], [55, 65, 56, 66], [57, 64, 58, 63], [77, 92, 78, 91], [79, 89, 80, 90]];
 
 // Even moreso
-let sigma = [[1, 287, 2, 288], [0, 289, 299, 290], [3, 126, 4, 125], [5, 16, 6, 15], [7, 13, 8, 14], [9, 255, 10, 256], [11, 254, 12, 253], [17, 127, 18, 128], [19, 282, 20, 281], [21, 132, 22, 131], [23, 277, 24, 278], [25, 235, 26, 236], [27, 222, 28, 221], [29, 223, 30, 224], [31, 38, 32, 37], [33, 228, 34, 227], [35, 225, 36, 226], [39, 230, 40, 229], [41, 156, 42, 155], [43, 157, 44, 158], [45, 164, 46, 163], [47, 165, 48, 166], [49, 56, 50, 55], [51, 198, 52, 197], [53, 195, 54, 196], [57, 243, 58, 244], [59, 242, 60, 241], [61, 231, 62, 232], [63, 234, 64, 233], [65, 248, 66, 247], [67, 249, 68, 250], [69, 276, 70, 275], [71, 133, 72, 134], [73, 83, 74, 84], [75, 82, 76, 81], [77, 283, 78, 284], [79, 286, 80, 285], [85, 295, 86, 296], [87, 294, 88, 293], [89, 291, 90, 292], [91, 298, 92, 297], [93, 136, 94, 135], [95, 109, 96, 110], [97, 108, 98, 107], [99, 122, 100, 121], [101, 259, 102, 260], [103, 262, 104, 261], [105, 119, 106, 120], [111, 273, 112, 274], [113, 272, 114, 271], [115, 265, 116, 266], [117, 264, 118, 263], [123, 137, 124, 138], [129, 280, 130, 279], [139, 257, 140, 258], [141, 268, 142, 267], [143, 269, 144, 270], [145, 252, 146, 251], [147, 237, 148, 238], [149, 216, 150, 215], [151, 217, 152, 218], [153, 220, 154, 219], [159, 210, 160, 209], [161, 211, 162, 212], [167, 190, 168, 189], [169, 187, 170, 188], [171, 205, 172, 206], [173, 200, 174, 199], [175, 201, 176, 202], [177, 204, 178, 203], [179, 186, 180, 185], [181, 191, 182, 192], [183, 194, 184, 193], [207, 214, 208, 213], [239, 245, 240, 246]];
+//let sigma = [[1, 287, 2, 288], [0, 289, 299, 290], [3, 126, 4, 125], [5, 16, 6, 15], [7, 13, 8, 14], [9, 255, 10, 256], [11, 254, 12, 253], [17, 127, 18, 128], [19, 282, 20, 281], [21, 132, 22, 131], [23, 277, 24, 278], [25, 235, 26, 236], [27, 222, 28, 221], [29, 223, 30, 224], [31, 38, 32, 37], [33, 228, 34, 227], [35, 225, 36, 226], [39, 230, 40, 229], [41, 156, 42, 155], [43, 157, 44, 158], [45, 164, 46, 163], [47, 165, 48, 166], [49, 56, 50, 55], [51, 198, 52, 197], [53, 195, 54, 196], [57, 243, 58, 244], [59, 242, 60, 241], [61, 231, 62, 232], [63, 234, 64, 233], [65, 248, 66, 247], [67, 249, 68, 250], [69, 276, 70, 275], [71, 133, 72, 134], [73, 83, 74, 84], [75, 82, 76, 81], [77, 283, 78, 284], [79, 286, 80, 285], [85, 295, 86, 296], [87, 294, 88, 293], [89, 291, 90, 292], [91, 298, 92, 297], [93, 136, 94, 135], [95, 109, 96, 110], [97, 108, 98, 107], [99, 122, 100, 121], [101, 259, 102, 260], [103, 262, 104, 261], [105, 119, 106, 120], [111, 273, 112, 274], [113, 272, 114, 271], [115, 265, 116, 266], [117, 264, 118, 263], [123, 137, 124, 138], [129, 280, 130, 279], [139, 257, 140, 258], [141, 268, 142, 267], [143, 269, 144, 270], [145, 252, 146, 251], [147, 237, 148, 238], [149, 216, 150, 215], [151, 217, 152, 218], [153, 220, 154, 219], [159, 210, 160, 209], [161, 211, 162, 212], [167, 190, 168, 189], [169, 187, 170, 188], [171, 205, 172, 206], [173, 200, 174, 199], [175, 201, 176, 202], [177, 204, 178, 203], [179, 186, 180, 185], [181, 191, 182, 192], [183, 194, 184, 193], [207, 214, 208, 213], [239, 245, 240, 246]];
 
 drawMapAsync(sigma);
 

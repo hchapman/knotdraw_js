@@ -1,5 +1,7 @@
 'use strict';
 
+var _slicedToArray = function () { function sliceIterator(arr, i) { var _arr = []; var _n = true; var _d = false; var _e = undefined; try { for (var _i = arr[Symbol.iterator](), _s; !(_n = (_s = _i.next()).done); _n = true) { _arr.push(_s.value); if (i && _arr.length === i) break; } } catch (err) { _d = true; _e = err; } finally { try { if (!_n && _i["return"]) _i["return"](); } finally { if (_d) throw _e; } } return _arr; } return function (arr, i) { if (Array.isArray(arr)) { return arr; } else if (Symbol.iterator in Object(arr)) { return sliceIterator(arr, i); } else { throw new TypeError("Invalid attempt to destructure non-iterable instance"); } }; }();
+
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
@@ -12,16 +14,33 @@ function least_squares(X /* : Matrix */, Y /* : Matrix */) /* : least_squares */
     return betaHat;
 }
 
-var MeshEdge = function MeshEdge(parent, start, stop) {
-    _classCallCheck(this, MeshEdge);
+var MeshEdge = function () {
+    function MeshEdge(parent, start, stop) {
+        _classCallCheck(this, MeshEdge);
 
-    this.parent = parent;
-    this.start = start;
-    this.stop = stop;
+        this.parent = parent;
+        this.start = start;
+        this.stop = stop;
 
-    this.svg = this.parent.edgeG.line(start.x(), start.y(), stop.x(), stop.y());
-    this.svg.addClass("scaffold");
-};
+        this.svg = this.parent.edgeG.line(start.x(), start.y(), stop.x(), stop.y());
+        this.svg.addClass("scaffold");
+    }
+
+    _createClass(MeshEdge, [{
+        key: 'set_nodes',
+        value: function set_nodes(start, end) {
+            var anim_ms = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : 0;
+
+            if (anim_ms == 0) {
+                this.svg.attr({ 'x1': start.x(), 'y1': start.y(), 'x2': end.x(), 'y2': end.y() });
+            } else {
+                this.svg.animate({ 'x1': start.x(), 'y1': start.y(), 'x2': end.x(), 'y2': end.y() }, anim_ms);
+            }
+        }
+    }]);
+
+    return MeshEdge;
+}();
 
 var MeshNode = function () {
     function MeshNode(parent, x, y) {
@@ -29,6 +48,8 @@ var MeshNode = function () {
 
         this.parent = parent;
         this.svg = this.parent.nodeG.circle(x, y, .3);
+        this._x = x;
+        this._y = y;
         this.svg.addClass('plnode');
 
         this.svg.node.addEventListener('click', this.onClick.bind(this));
@@ -43,14 +64,17 @@ var MeshNode = function () {
     }, {
         key: 'move',
         value: function move(x, y) {
-            var anim_ms = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : 0;
+            var new_r = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : undefined;
+            var anim_ms = arguments.length > 3 && arguments[3] !== undefined ? arguments[3] : 0;
 
+            this._x = x;
+            this._y = y;
             if (anim_ms == 0) {
                 // Do not animate
-                this.svg.attr({ 'cx': x, 'cy': y });
+                this.svg.attr({ 'cx': x, 'cy': y, 'r': new_r });
             } else {
                 // Animate the motion
-                this.svg.animate({ 'cx': x, 'cy': y }, anim_ms, mina.bounce);
+                this.svg.animate({ 'cx': x, 'cy': y, 'r': new_r }, anim_ms);
             }
         }
     }, {
@@ -61,18 +85,28 @@ var MeshNode = function () {
             if (anim_ms == 0) {
                 this.svg.attr({ 'r': r });
             } else {
-                this.svg.animate({ 'r': r }, anim_ms, mina.bounce);
+                this.svg.animate({ 'r': r }, anim_ms);
             }
+        }
+    }, {
+        key: 'cur_x',
+        value: function cur_x() {
+            return this.svg.attr('cx');
         }
     }, {
         key: 'x',
         value: function x() {
-            return this.svg.attr('cx');
+            return this._x;
+        }
+    }, {
+        key: 'cur_y',
+        value: function cur_y() {
+            return this.svg.attr('cy');
         }
     }, {
         key: 'y',
         value: function y() {
-            return this.svg.attr('cy');
+            return this._y;
         }
     }, {
         key: 'onClick',
@@ -88,12 +122,98 @@ var MeshNode = function () {
     return MeshNode;
 }();
 
+var CompEdgeNode = function () {
+    function CompEdgeNode(parent, x, y, r) {
+        _classCallCheck(this, CompEdgeNode);
+
+        this.parent = parent;
+        this.svg = this.parent.knotG.circle(x, y, r);
+        this._x = x;
+        this._y = y;
+        this._r = r;
+
+        this.svg.node.addEventListener('click', this.onClick.bind(this));
+
+        this.dragging = false;
+    }
+
+    _createClass(CompEdgeNode, [{
+        key: 'set_obj',
+        value: function set_obj(i, obj) {
+            this.i = i;
+            this.obj = obj;
+        }
+    }, {
+        key: 'move',
+        value: function move(x, y, r) {
+            var anim_ms = arguments.length > 3 && arguments[3] !== undefined ? arguments[3] : 0;
+
+            this._x = x;
+            this._y = y;
+            this._r = r;
+            if (anim_ms == 0) {
+                // Do not animate
+                this.svg.attr({ 'cx': x, 'cy': y, 'r': r });
+            } else {
+                // Animate the motion
+                this.svg.animate({ 'cx': x, 'cy': y, 'r': r }, anim_ms);
+            }
+        }
+    }, {
+        key: 'set_r',
+        value: function set_r(r) {
+            var anim_ms = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 0;
+
+            if (anim_ms == 0) {
+                this.svg.attr({ 'r': r });
+            } else {
+                this.svg.animate({ 'r': r }, anim_ms);
+            }
+        }
+    }, {
+        key: 'cur_x',
+        value: function cur_x() {
+            return this.svg.attr('cx');
+        }
+    }, {
+        key: 'x',
+        value: function x() {
+            return this._x;
+        }
+    }, {
+        key: 'cur_y',
+        value: function cur_y() {
+            return this.svg.attr('cy');
+        }
+    }, {
+        key: 'y',
+        value: function y() {
+            return this._y;
+        }
+    }, {
+        key: 'onClick',
+        value: function onClick(e) {
+            console.log(this);
+            console.log(this.obj);
+            if (this.obj.length == 2) {
+                this.parent.delete_face(this.i);
+            }
+        }
+    }]);
+
+    return CompEdgeNode;
+}();
+
 var MeshDraw = function () {
     function MeshDraw(div) {
         _classCallCheck(this, MeshDraw);
 
         this.nodes = [];
         this.edges = {};
+        this.comp_edgenodes = [];
+        this.comps = [];
+
+        this.anim_ms = 1000;
         /*this.pan = svgPanZoom(div, {
             minZoom: 0.1,
             maxZoom: 50,
@@ -114,6 +234,7 @@ var MeshDraw = function () {
         value: function clear() {
             this.nodes = [];
             this.edges = {};
+            this.comps = [];
 
             this.edgeG.clear();
             this.nodeG.clear();
@@ -199,8 +320,8 @@ var MeshDraw = function () {
                 for (var _iterator2 = conv.comps[Symbol.iterator](), _step2; !(_iteratorNormalCompletion2 = (_step2 = _iterator2.next()).done); _iteratorNormalCompletion2 = true) {
                     var component = _step2.value;
 
-                    var knot = this.add_component(component, map4v, points);
-                    knot.addClass('q' + ci + "-9");
+                    this.comps[ci] = this.add_component(component, map4v, points, conv);
+                    this.comps[ci].addClass('q' + ci + "-9");
                     ci += 1;
                 }
             } catch (err) {
@@ -221,6 +342,8 @@ var MeshDraw = function () {
     }, {
         key: 'update_embedding',
         value: function update_embedding(g /*metric*/, embedding, map4v /*original map*/, conv) {
+            var _this = this;
+
             var anim_ms = arguments.length > 4 && arguments[4] !== undefined ? arguments[4] : 0;
 
             var points = embedding[0];
@@ -242,13 +365,14 @@ var MeshDraw = function () {
             var dx = wid * 0.05;
             var dy = hgt * 0.05;
 
-            this.draw.attr({ viewBox: [min_x - dx, min_y - dy, wid + 2 * dx, hgt + 2 * dy].join(",") });
+            Snap.animate(this.draw.attr("viewBox").vb.split(" "), [min_x - dx, min_y - dy, wid + 2 * dx, hgt + 2 * dy], function (v) {
+                _this.draw.attr("viewBox", v.join(" "));
+            }, this.anim_ms);
 
             //console.log(points);
             for (var i = 0; i < points.m; i++) {
                 var node = this.nodes[i];
-                node.move(i, points.val[i * points.n], points.val[i * points.n + 1]);
-                node.set_r(this.g.gamma[this.nodes.length - 1]);
+                node.move(points.val[i * points.n], points.val[i * points.n + 1], this.g.gamma[i], this.anim_ms);
             }
 
             var _iteratorNormalCompletion3 = true;
@@ -263,13 +387,10 @@ var MeshDraw = function () {
                         var edge = [comp[pi], comp[(pi + 1) % comp.length]];
                         //console.log(edge);
                         if (edge[0] in this.nodes && edge[1] in this.nodes) {
-                            var mesh_edge = this.add_edge(edge[0], edge[1]);
-                            mesh_edge.svg.addClass('edge');
+                            this.update_edge(edge[0], edge[1]);
                         }
                     }
                 }
-
-                //console.log(this.map4v.faces);
             } catch (err) {
                 _didIteratorError3 = true;
                 _iteratorError3 = err;
@@ -285,13 +406,6 @@ var MeshDraw = function () {
                 }
             }
 
-            for (var idx in conv.faces) {
-                //console.log(fi);
-                if (conv.faces[idx].length > 0) {
-                    var mesh_face = this.add_face(conv.faces[idx][0], parseInt(idx));
-                }
-            }
-
             var ci = 0;
             var _iteratorNormalCompletion4 = true;
             var _didIteratorError4 = false;
@@ -301,8 +415,7 @@ var MeshDraw = function () {
                 for (var _iterator4 = conv.comps[Symbol.iterator](), _step4; !(_iteratorNormalCompletion4 = (_step4 = _iterator4.next()).done); _iteratorNormalCompletion4 = true) {
                     var component = _step4.value;
 
-                    var knot = this.add_component(component, map4v, points);
-                    knot.addClass('q' + ci + "-9");
+                    this.update_component(ci, component, map4v, points, conv);
                     ci += 1;
                 }
             } catch (err) {
@@ -346,6 +459,11 @@ var MeshDraw = function () {
             return edge;
         }
     }, {
+        key: 'update_edge',
+        value: function update_edge(i, j) {
+            this.edges[[i, j]].set_nodes(this.nodes[i], this.nodes[j], this.anim_ms);
+        }
+    }, {
         key: 'add_face',
         value: function add_face(i, fi) {
             var face_node = this.nodes[i];
@@ -353,9 +471,8 @@ var MeshDraw = function () {
             face_node.set_obj(i, this.map4v.faces[fi]);
         }
     }, {
-        key: 'add_component',
-        value: function add_component(component, map4v, points) {
-            // A path of the form anchor, control, anchor...
+        key: 'component_path_gen',
+        value: function component_path_gen(component, map4v, points) {
             var path = [];
             var pts = points;
 
@@ -405,8 +522,6 @@ var MeshDraw = function () {
                     idx += 1;
                     pathStr += pt.join(",");
                 }
-
-                //console.log(pathStr);
             } catch (err) {
                 _didIteratorError5 = true;
                 _iteratorError5 = err;
@@ -422,10 +537,131 @@ var MeshDraw = function () {
                 }
             }
 
+            return [path, pathStr];
+        }
+    }, {
+        key: 'quadratic_segments',
+        value: function quadratic_segments(path) {
+            var slices = [];
+            for (var i = 0; i < path.length - 4; i += 2) {
+                slices.push(path.slice(i, i + 3));
+            }
+            slices.unshift(path.slice(path.length - 3, path.length));
+
+            return slices;
+        }
+    }, {
+        key: 'quadratic_segments_to_cubic',
+        value: function quadratic_segments_to_cubic(segs) {
+            var csegs = [];
+            var _iteratorNormalCompletion6 = true;
+            var _didIteratorError6 = false;
+            var _iteratorError6 = undefined;
+
+            try {
+                for (var _iterator6 = segs[Symbol.iterator](), _step6; !(_iteratorNormalCompletion6 = (_step6 = _iterator6.next()).done); _iteratorNormalCompletion6 = true) {
+                    var seg = _step6.value;
+
+                    var _seg = _slicedToArray(seg, 3),
+                        q0 = _seg[0],
+                        q1 = _seg[1],
+                        q2 = _seg[2];
+
+                    csegs.push([q0, add(q0, mul(2 / 3, sub(q1, q0))), add(q2, mul(2 / 3, sub(q1, q2))), q2]);
+                }
+            } catch (err) {
+                _didIteratorError6 = true;
+                _iteratorError6 = err;
+            } finally {
+                try {
+                    if (!_iteratorNormalCompletion6 && _iterator6.return) {
+                        _iterator6.return();
+                    }
+                } finally {
+                    if (_didIteratorError6) {
+                        throw _iteratorError6;
+                    }
+                }
+            }
+
+            return csegs;
+        }
+    }, {
+        key: 'add_component',
+        value: function add_component(component, map4v, points, conv) {
+            var _this2 = this;
+
+            // A path of the form anchor, control, anchor...
+            var _component_path_gen = this.component_path_gen(component, map4v, points),
+                _component_path_gen2 = _slicedToArray(_component_path_gen, 2),
+                path = _component_path_gen2[0],
+                pathStr = _component_path_gen2[1];
+
+            var segs = this.quadratic_segments_to_cubic(this.quadratic_segments(path));
+
+            var _loop = function _loop(si) {
+                var tri_i = component[si];
+                if (!conv.edges.some(function (e) {
+                    return e.includes(tri_i);
+                })) {
+                    return 'continue';
+                }
+
+                var seg = segs[si];
+
+                var p = Snap.path.findDotsAtSegment(seg[0][0], seg[0][1], seg[1][0], seg[1][1], seg[2][0], seg[2][1], seg[3][0], seg[3][1], .5);
+                _this2.comp_edgenodes[tri_i] = new CompEdgeNode(_this2, p.x, p.y, _this2.g.gamma[tri_i] / 2);
+            };
+
+            for (var si = 0; si < segs.length; si++) {
+                var _ret = _loop(si);
+
+                if (_ret === 'continue') continue;
+            }
+
+            //console.log(pathStr);
             var knot = this.knotG.path(pathStr + "Z");
             knot.addClass('knot');
 
             return knot;
+        }
+    }, {
+        key: 'update_component',
+        value: function update_component(ci, component, map4v, points, conv) {
+            var _this3 = this;
+
+            // A path of the form anchor, control, anchor...
+            var _component_path_gen3 = this.component_path_gen(component, map4v, points),
+                _component_path_gen4 = _slicedToArray(_component_path_gen3, 2),
+                path = _component_path_gen4[0],
+                pathStr = _component_path_gen4[1];
+
+            var segs = this.quadratic_segments_to_cubic(this.quadratic_segments(path));
+
+            var _loop2 = function _loop2(si) {
+                var tri_i = component[si];
+                if (!conv.edges.some(function (e) {
+                    return e.includes(tri_i);
+                })) {
+                    return 'continue';
+                }
+
+                var seg = segs[si];
+
+                var p = Snap.path.findDotsAtSegment(seg[0][0], seg[0][1], seg[1][0], seg[1][1], seg[2][0], seg[2][1], seg[3][0], seg[3][1], .5);
+
+                _this3.comp_edgenodes[tri_i].move(p.x, p.y, _this3.g.gamma[tri_i] / 2, _this3.anim_ms);
+            };
+
+            for (var si = 0; si < segs.length; si++) {
+                var _ret2 = _loop2(si);
+
+                if (_ret2 === 'continue') continue;
+            }
+
+            //console.log(pathStr);
+            this.comps[ci].stop();
+            this.comps[ci].animate({ "d": pathStr + "Z" }, this.anim_ms);
         }
     }]);
 
@@ -471,7 +707,7 @@ cpWorker.onmessage = function (ev) {
 //let sigma = [[0, 1, 7, 2], [3, 6, 4, 5]];
 
 // Monogon in internal face
-//let sigma = [[1, 8, 2, 7], [0, 14, 15, 13], [3, 9, 4, 10], [5, 12, 6, 11]];
+var sigma = [[1, 8, 2, 7], [0, 14, 15, 13], [3, 9, 4, 10], [5, 12, 6, 11]];
 
 // Small 2-link
 //let sigma = [[1, 4, 2, 3], [0, 8, 7, 15], [5, 14, 6, 13], [9, 12, 10, 11]];
@@ -486,7 +722,7 @@ cpWorker.onmessage = function (ev) {
 //let sigma = [[0, 41, 99, 42], [1, 47, 2, 48], [3, 34, 4, 33], [5, 96, 6, 95], [7, 13, 8, 14], [9, 68, 10, 67], [11, 69, 12, 70], [15, 62, 16, 61], [17, 59, 18, 60], [19, 85, 20, 86], [21, 27, 22, 28], [23, 82, 24, 81], [25, 83, 26, 84], [29, 88, 30, 87], [31, 93, 32, 94], [35, 46, 36, 45], [37, 43, 38, 44], [39, 98, 40, 97], [49, 76, 50, 75], [51, 73, 52, 74], [53, 72, 54, 71], [55, 65, 56, 66], [57, 64, 58, 63], [77, 92, 78, 91], [79, 89, 80, 90]];
 
 // Even moreso
-var sigma = [[1, 287, 2, 288], [0, 289, 299, 290], [3, 126, 4, 125], [5, 16, 6, 15], [7, 13, 8, 14], [9, 255, 10, 256], [11, 254, 12, 253], [17, 127, 18, 128], [19, 282, 20, 281], [21, 132, 22, 131], [23, 277, 24, 278], [25, 235, 26, 236], [27, 222, 28, 221], [29, 223, 30, 224], [31, 38, 32, 37], [33, 228, 34, 227], [35, 225, 36, 226], [39, 230, 40, 229], [41, 156, 42, 155], [43, 157, 44, 158], [45, 164, 46, 163], [47, 165, 48, 166], [49, 56, 50, 55], [51, 198, 52, 197], [53, 195, 54, 196], [57, 243, 58, 244], [59, 242, 60, 241], [61, 231, 62, 232], [63, 234, 64, 233], [65, 248, 66, 247], [67, 249, 68, 250], [69, 276, 70, 275], [71, 133, 72, 134], [73, 83, 74, 84], [75, 82, 76, 81], [77, 283, 78, 284], [79, 286, 80, 285], [85, 295, 86, 296], [87, 294, 88, 293], [89, 291, 90, 292], [91, 298, 92, 297], [93, 136, 94, 135], [95, 109, 96, 110], [97, 108, 98, 107], [99, 122, 100, 121], [101, 259, 102, 260], [103, 262, 104, 261], [105, 119, 106, 120], [111, 273, 112, 274], [113, 272, 114, 271], [115, 265, 116, 266], [117, 264, 118, 263], [123, 137, 124, 138], [129, 280, 130, 279], [139, 257, 140, 258], [141, 268, 142, 267], [143, 269, 144, 270], [145, 252, 146, 251], [147, 237, 148, 238], [149, 216, 150, 215], [151, 217, 152, 218], [153, 220, 154, 219], [159, 210, 160, 209], [161, 211, 162, 212], [167, 190, 168, 189], [169, 187, 170, 188], [171, 205, 172, 206], [173, 200, 174, 199], [175, 201, 176, 202], [177, 204, 178, 203], [179, 186, 180, 185], [181, 191, 182, 192], [183, 194, 184, 193], [207, 214, 208, 213], [239, 245, 240, 246]];
+//let sigma = [[1, 287, 2, 288], [0, 289, 299, 290], [3, 126, 4, 125], [5, 16, 6, 15], [7, 13, 8, 14], [9, 255, 10, 256], [11, 254, 12, 253], [17, 127, 18, 128], [19, 282, 20, 281], [21, 132, 22, 131], [23, 277, 24, 278], [25, 235, 26, 236], [27, 222, 28, 221], [29, 223, 30, 224], [31, 38, 32, 37], [33, 228, 34, 227], [35, 225, 36, 226], [39, 230, 40, 229], [41, 156, 42, 155], [43, 157, 44, 158], [45, 164, 46, 163], [47, 165, 48, 166], [49, 56, 50, 55], [51, 198, 52, 197], [53, 195, 54, 196], [57, 243, 58, 244], [59, 242, 60, 241], [61, 231, 62, 232], [63, 234, 64, 233], [65, 248, 66, 247], [67, 249, 68, 250], [69, 276, 70, 275], [71, 133, 72, 134], [73, 83, 74, 84], [75, 82, 76, 81], [77, 283, 78, 284], [79, 286, 80, 285], [85, 295, 86, 296], [87, 294, 88, 293], [89, 291, 90, 292], [91, 298, 92, 297], [93, 136, 94, 135], [95, 109, 96, 110], [97, 108, 98, 107], [99, 122, 100, 121], [101, 259, 102, 260], [103, 262, 104, 261], [105, 119, 106, 120], [111, 273, 112, 274], [113, 272, 114, 271], [115, 265, 116, 266], [117, 264, 118, 263], [123, 137, 124, 138], [129, 280, 130, 279], [139, 257, 140, 258], [141, 268, 142, 267], [143, 269, 144, 270], [145, 252, 146, 251], [147, 237, 148, 238], [149, 216, 150, 215], [151, 217, 152, 218], [153, 220, 154, 219], [159, 210, 160, 209], [161, 211, 162, 212], [167, 190, 168, 189], [169, 187, 170, 188], [171, 205, 172, 206], [173, 200, 174, 199], [175, 201, 176, 202], [177, 204, 178, 203], [179, 186, 180, 185], [181, 191, 182, 192], [183, 194, 184, 193], [207, 214, 208, 213], [239, 245, 240, 246]];
 
 drawMapAsync(sigma);
 

@@ -1445,30 +1445,29 @@ var workerFunctions = {
 
         postMessage({
             function: "setEmbedding",
-            arguments: {
-                flat_poly: self.flat_poly,
-                embedding: embedding,
-                m4v: self.shadow,
-                conv: self.trign[4] }
+            arguments: [self.flat_poly, embedding, self.shadow, self.trign[4]]
         });
 
-        sleep(20);
+        var curDate = void 0;
+        do {
+            curDate = Date.now();
+        } while (curDate - tstart < 100);
 
         while (self.flat_poly.loss(self.tgt_K) > thresh) {
+            var procStart = Date.now();
+
             self.flat_poly.newton_step(self.tgt_K, 1);
 
             embedding = embed_faces(self.flat_poly);
 
             postMessage({
-                function: "setEmbedding",
-                arguments: {
-                    flat_poly: self.flat_poly,
-                    embedding: embedding,
-                    m4v: self.shadow,
-                    conv: self.trign[4] }
+                function: "updateEmbedding",
+                arguments: [self.flat_poly, embedding, self.shadow, self.trign[4]]
             });
 
-            sleep(20);
+            do {
+                curDate = Date.now();
+            } while (curDate - procStart < 1000);
         }
 
         console.log("Computation finished in: " + (Date.now() - tstart) + " milliseconds");
