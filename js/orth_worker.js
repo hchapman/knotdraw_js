@@ -2179,4 +2179,4 @@ var workerFunctions = {
 onmessage = function onmessage(e) {
     workerFunctions[e.data.function].apply(workerFunctions, _toConsumableArray(e.data.arguments));
 };
-//# sourceMappingURL=cp_worker.js.map
+//# sourceMappingURL=orth_worker.js.map
