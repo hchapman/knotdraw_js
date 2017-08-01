@@ -4,6 +4,12 @@ var _slicedToArray = function () { function sliceIterator(arr, i) { var _arr = [
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
+var _shadow = require('lib/shadow.js');
+
+var _shadow2 = _interopRequireDefault(_shadow);
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
 function _toConsumableArray(arr) { if (Array.isArray(arr)) { for (var i = 0, arr2 = Array(arr.length); i < arr.length; i++) { arr2[i] = arr[i]; } return arr2; } else { return Array.from(arr); } }
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
@@ -18,183 +24,9 @@ function leastSquares(X /* : Matrix */, Y /* : Matrix */) /* : leastSquares */{
     return betaHat;
 }
 
-var LinkShadow = function () {
-    function LinkShadow(verts) {
-        _classCallCheck(this, LinkShadow);
-
-        this.nv = verts.length;
-        this.ne = this.nv * 2;
-        this.na = this.nv * 4;
-
-        this.arcs = [];
-        this.edges = [];
-        this.verts = [];
-
-        // Edge i is canonically of the form [2i, 2i+1]
-        for (var ei = 0; ei < this.ne; ei++) {
-            //console.log(ei);
-            this.newArc(2 * ei);
-            this.newArc(2 * ei + 1);
-            //console.log(this.arcs)
-
-            this.setEdge(ei, [2 * ei, 2 * ei + 1]);
-        }
-
-        // Set verts by looking through verts
-        for (var vi in verts) {
-            this.setVert(vi, verts[vi]);
-        }
-
-        this.generateFaces();
-        this.generateComponents();
-    }
-
-    _createClass(LinkShadow, [{
-        key: 'generateFaces',
-        value: function generateFaces() {
-            var leftArcs = new Set(this.arcs);
-            this.faces = [];
-
-            while (leftArcs.size > 0) {
-                var startArc = Array.from(leftArcs).pop();
-
-                var face = [];
-                var arc = startArc;
-                var _failsafe = 0;
-                do {
-                    leftArcs.delete(arc);
-                    face.push(arc);
-                    arc.face = this.faces.length;
-                    //console.log(arc);
-
-                    var oArc = this.edges[arc.edge][(arc.edgepos + 1) % 2];
-                    arc = this.verts[oArc.vert][(oArc.vertpos + 1) % 4];
-                    //console.log(arc);
-                    _failsafe += 1;
-                    if (_failsafe > 500) {
-                        console.log("Failure");
-                        return this.faces;
-                    }
-                } while (arc != startArc);
-
-                //face.reverse();
-                this.faces.push(face);
-            }
-            return this.faces;
-        }
-    }, {
-        key: 'generateComponents',
-        value: function generateComponents() {
-            var oneOrient = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : true;
-
-            var leftArcs = new Set(this.arcs);
-
-            this.components = [];
-            while (leftArcs.size > 0) {
-                var startArc = Array.from(leftArcs).pop();
-
-                var component = this.component(startArc);
-                var _iteratorNormalCompletion = true;
-                var _didIteratorError = false;
-                var _iteratorError = undefined;
-
-                try {
-                    for (var _iterator = component[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) {
-                        var arc = _step.value;
-
-                        leftArcs.delete(arc);
-                        if (oneOrient) {
-                            // Delete the other arc edge-opposite this one
-                            leftArcs.delete(this.edges[arc.edge][(arc.edgepos + 1) % 2]);
-                        }
-                    }
-                } catch (err) {
-                    _didIteratorError = true;
-                    _iteratorError = err;
-                } finally {
-                    try {
-                        if (!_iteratorNormalCompletion && _iterator.return) {
-                            _iterator.return();
-                        }
-                    } finally {
-                        if (_didIteratorError) {
-                            throw _iteratorError;
-                        }
-                    }
-                }
-
-                this.components.push(component);
-            }
-            return this.components;
-        }
-    }, {
-        key: 'component',
-        value: function component(arc) {
-            var startArc = arc;
-
-            var component = [];
-            do {
-                component.push(arc);
-
-                var oArc = this.edges[arc.edge][(arc.edgepos + 1) % 2];
-                arc = this.verts[oArc.vert][(oArc.vertpos + 2) % 4];
-            } while (arc != startArc);
-
-            return component;
-        }
-    }, {
-        key: 'outVertI',
-        value: function outVertI(arc) {
-            return arc.vert;
-        }
-    }, {
-        key: 'inVertI',
-        value: function inVertI(arc) {
-            return this.edges[arc.edge][(arc.edgepos + 1) % 2].vert;
-        }
-    }, {
-        key: 'newArc',
-        value: function newArc(idx) {
-            this.arcs[idx] = { index: idx, edge: undefined, edgepos: undefined, vert: undefined, vertpos: undefined };
-        }
-    }, {
-        key: 'setEdge',
-        value: function setEdge(idx, ais) {
-            var _this = this;
-
-            this.edges[idx] = ais.map(function (ai) {
-                return _this.arcs[ai];
-            }, this);
-
-            for (var _i in ais) {
-                this.arcs[ais[_i]].edge = idx;
-                this.arcs[ais[_i]].edgepos = parseInt(_i);
-            }
-        }
-    }, {
-        key: 'setVert',
-        value: function setVert(idx, ais) {
-            var _this2 = this;
-
-            this.verts[idx] = ais.map(function (ai) {
-                return _this2.arcs[ai];
-            }, this);
-
-            for (var _i2 in ais) {
-                //console.log(i)
-                //console.log(this.arcs)
-                this.arcs[ais[_i2]].vert = parseInt(idx);
-                this.arcs[ais[_i2]].vertpos = parseInt(_i2);
-            }
-        }
-    }]);
-
-    return LinkShadow;
-}();
-
 var OrthogonalFace = function () {
     function OrthogonalFace(link, arcs) {
-        var _this3 = this;
+        var _this = this;
 
         var exterior = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : false;
 
@@ -204,7 +36,7 @@ var OrthogonalFace = function () {
         this.arcs = arcs;
         this.exterior = exterior;
         this.edges = this.arcs.map(function (a) {
-            return _this3.link.edges[a.edge].map(function (b) {
+            return _this.link.edges[a.edge].map(function (b) {
                 return b.index;
             });
         });
@@ -237,6 +69,36 @@ var OrthogonalFace = function () {
         key: 'bend',
         value: function bend(arc, turns) {
             var i = this.arcs.indexOf(arc);
+            turns.reverse();
+
+            var _iteratorNormalCompletion = true;
+            var _didIteratorError = false;
+            var _iteratorError = undefined;
+
+            try {
+                for (var _iterator = turns[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) {
+                    var t = _step.value;
+
+                    var nArc = this.link.verts[arc.vert][(arc.vertpos - 1) % 2];
+                    var oArc = this.link.edges[nArc.edge][(nArc.edgepos + 1) % 2];
+
+                    this.arcs.splice(i, 0, oArc);
+                    this.turns.splice(i, 0, t);
+                }
+            } catch (err) {
+                _didIteratorError = true;
+                _iteratorError = err;
+            } finally {
+                try {
+                    if (!_iteratorNormalCompletion && _iterator.return) {
+                        _iterator.return();
+                    }
+                } finally {
+                    if (_didIteratorError) {
+                        throw _iteratorError;
+                    }
+                }
+            }
         }
     }]);
 
@@ -439,11 +301,8 @@ var DiGraph = function () {
             return true;
         }
     }, {
-        key: 'treePath',
-        value: function treePath(start, stop) {
-            // Requires that this is a tree to avoid real programming...
-
-            // this.edges is a map source -> sink
+        key: 'getReverseEdges',
+        value: function getReverseEdges() {
             var rev_edges = new Map();
             var _iteratorNormalCompletion6 = true;
             var _didIteratorError6 = false;
@@ -487,35 +346,35 @@ var DiGraph = function () {
 
                     var _u = _ref12[0];
                     var sinks = _ref12[1];
-                    var _iteratorNormalCompletion11 = true;
-                    var _didIteratorError11 = false;
-                    var _iteratorError11 = undefined;
+                    var _iteratorNormalCompletion8 = true;
+                    var _didIteratorError8 = false;
+                    var _iteratorError8 = undefined;
 
                     try {
-                        for (var _iterator11 = sinks[Symbol.iterator](), _step11; !(_iteratorNormalCompletion11 = (_step11 = _iterator11.next()).done); _iteratorNormalCompletion11 = true) {
-                            var _ref17 = _step11.value;
+                        for (var _iterator8 = sinks[Symbol.iterator](), _step8; !(_iteratorNormalCompletion8 = (_step8 = _iterator8.next()).done); _iteratorNormalCompletion8 = true) {
+                            var _ref13 = _step8.value;
 
-                            var _ref18 = _slicedToArray(_ref17, 2);
+                            var _ref14 = _slicedToArray(_ref13, 2);
 
-                            var _v7 = _ref18[0];
-                            var _d4 = _ref18[1];
+                            var _v5 = _ref14[0];
+                            var _d2 = _ref14[1];
 
-                            if (!rev_edges.has(_v7)) {
-                                rev_edges.set(_v7, new Map());
+                            if (!rev_edges.has(_v5)) {
+                                rev_edges.set(_v5, new Map());
                             }
-                            rev_edges.get(_v7).set(_u, {});
+                            rev_edges.get(_v5).set(_u, {});
                         }
                     } catch (err) {
-                        _didIteratorError11 = true;
-                        _iteratorError11 = err;
+                        _didIteratorError8 = true;
+                        _iteratorError8 = err;
                     } finally {
                         try {
-                            if (!_iteratorNormalCompletion11 && _iterator11.return) {
-                                _iterator11.return();
+                            if (!_iteratorNormalCompletion8 && _iterator8.return) {
+                                _iterator8.return();
                             }
                         } finally {
-                            if (_didIteratorError11) {
-                                throw _iteratorError11;
+                            if (_didIteratorError8) {
+                                throw _iteratorError8;
                             }
                         }
                     }
@@ -535,30 +394,40 @@ var DiGraph = function () {
                 }
             }
 
+            return rev_edges;
+        }
+    }, {
+        key: 'treePath',
+        value: function treePath(start, stop) {
+            // Requires that this is a tree to avoid real programming...
+
+            // this.edges is a map source -> sink
+            var rev_edges = this.getReverseEdges();
+
             var search_nodes = new Set();
-            var _iteratorNormalCompletion8 = true;
-            var _didIteratorError8 = false;
-            var _iteratorError8 = undefined;
+            var _iteratorNormalCompletion9 = true;
+            var _didIteratorError9 = false;
+            var _iteratorError9 = undefined;
 
             try {
-                for (var _iterator8 = this.nodes.keys()[Symbol.iterator](), _step8; !(_iteratorNormalCompletion8 = (_step8 = _iterator8.next()).done); _iteratorNormalCompletion8 = true) {
-                    var _u2 = _step8.value;
+                for (var _iterator9 = this.nodes.keys()[Symbol.iterator](), _step9; !(_iteratorNormalCompletion9 = (_step9 = _iterator9.next()).done); _iteratorNormalCompletion9 = true) {
+                    var _u2 = _step9.value;
 
                     search_nodes.add(_u2);
                 }
 
                 // DFS for now, since it's easier
             } catch (err) {
-                _didIteratorError8 = true;
-                _iteratorError8 = err;
+                _didIteratorError9 = true;
+                _iteratorError9 = err;
             } finally {
                 try {
-                    if (!_iteratorNormalCompletion8 && _iterator8.return) {
-                        _iterator8.return();
+                    if (!_iteratorNormalCompletion9 && _iterator9.return) {
+                        _iterator9.return();
                     }
                 } finally {
-                    if (_didIteratorError8) {
-                        throw _iteratorError8;
+                    if (_didIteratorError9) {
+                        throw _iteratorError9;
                     }
                 }
             }
@@ -575,54 +444,18 @@ var DiGraph = function () {
                     node = _search_stack$pop2[1];
 
                 search_nodes.delete(node);
-                var _iteratorNormalCompletion9 = true;
-                var _didIteratorError9 = false;
-                var _iteratorError9 = undefined;
-
-                try {
-                    for (var _iterator9 = this.edges.get(node)[Symbol.iterator](), _step9; !(_iteratorNormalCompletion9 = (_step9 = _iterator9.next()).done); _iteratorNormalCompletion9 = true) {
-                        var _ref13 = _step9.value;
-
-                        var _ref14 = _slicedToArray(_ref13, 2);
-
-                        var _v5 = _ref14[0];
-                        var _d2 = _ref14[1];
-
-                        if (_v5 == stop) {
-                            return _path.concat([_v5]);
-                        }
-                        if (search_nodes.has(_v5)) {
-                            search_stack.push([_path.concat([_v5]), _v5]);
-                        }
-                    }
-                } catch (err) {
-                    _didIteratorError9 = true;
-                    _iteratorError9 = err;
-                } finally {
-                    try {
-                        if (!_iteratorNormalCompletion9 && _iterator9.return) {
-                            _iterator9.return();
-                        }
-                    } finally {
-                        if (_didIteratorError9) {
-                            throw _iteratorError9;
-                        }
-                    }
-                }
-
-                console.log(node, rev_edges, this.edges);
                 var _iteratorNormalCompletion10 = true;
                 var _didIteratorError10 = false;
                 var _iteratorError10 = undefined;
 
                 try {
-                    for (var _iterator10 = rev_edges.get(node)[Symbol.iterator](), _step10; !(_iteratorNormalCompletion10 = (_step10 = _iterator10.next()).done); _iteratorNormalCompletion10 = true) {
+                    for (var _iterator10 = this.edges.get(node)[Symbol.iterator](), _step10; !(_iteratorNormalCompletion10 = (_step10 = _iterator10.next()).done); _iteratorNormalCompletion10 = true) {
                         var _ref15 = _step10.value;
 
                         var _ref16 = _slicedToArray(_ref15, 2);
 
                         var _v6 = _ref16[0];
-                        var _d3 = _ref16[1];
+                        var d = _ref16[1];
 
                         if (_v6 == stop) {
                             return _path.concat([_v6]);
@@ -645,6 +478,42 @@ var DiGraph = function () {
                         }
                     }
                 }
+
+                console.log(node, rev_edges, this.edges);
+                var _iteratorNormalCompletion11 = true;
+                var _didIteratorError11 = false;
+                var _iteratorError11 = undefined;
+
+                try {
+                    for (var _iterator11 = rev_edges.get(node)[Symbol.iterator](), _step11; !(_iteratorNormalCompletion11 = (_step11 = _iterator11.next()).done); _iteratorNormalCompletion11 = true) {
+                        var _ref17 = _step11.value;
+
+                        var _ref18 = _slicedToArray(_ref17, 2);
+
+                        var _v7 = _ref18[0];
+                        var _d3 = _ref18[1];
+
+                        if (_v7 == stop) {
+                            return _path.concat([_v7]);
+                        }
+                        if (search_nodes.has(_v7)) {
+                            search_stack.push([_path.concat([_v7]), _v7]);
+                        }
+                    }
+                } catch (err) {
+                    _didIteratorError11 = true;
+                    _iteratorError11 = err;
+                } finally {
+                    try {
+                        if (!_iteratorNormalCompletion11 && _iterator11.return) {
+                            _iterator11.return();
+                        }
+                    } finally {
+                        if (_didIteratorError11) {
+                            throw _iteratorError11;
+                        }
+                    }
+                }
             } while (search_nodes.size > 0);
 
             return path;
@@ -656,22 +525,21 @@ var DiGraph = function () {
             // CAVEAT: We only care about nodes so "meh" to edges
 
             // this.edges is a map source -> sink
-            var rev_edges = new Map();
+            var rev_edges = this.getReverseEdges();
+
+            var search_nodes = new Set();
             var _iteratorNormalCompletion12 = true;
             var _didIteratorError12 = false;
             var _iteratorError12 = undefined;
 
             try {
-                for (var _iterator12 = this.nodes[Symbol.iterator](), _step12; !(_iteratorNormalCompletion12 = (_step12 = _iterator12.next()).done); _iteratorNormalCompletion12 = true) {
-                    var _ref19 = _step12.value;
+                for (var _iterator12 = this.nodes.keys()[Symbol.iterator](), _step12; !(_iteratorNormalCompletion12 = (_step12 = _iterator12.next()).done); _iteratorNormalCompletion12 = true) {
+                    var _u3 = _step12.value;
 
-                    var _ref20 = _slicedToArray(_ref19, 2);
-
-                    var _v8 = _ref20[0];
-                    var d = _ref20[1];
-
-                    rev_edges.set(_v8, new Map());
+                    search_nodes.add(_u3);
                 }
+
+                // DFS for now, since it's easier
             } catch (err) {
                 _didIteratorError12 = true;
                 _iteratorError12 = err;
@@ -687,91 +555,6 @@ var DiGraph = function () {
                 }
             }
 
-            var _iteratorNormalCompletion13 = true;
-            var _didIteratorError13 = false;
-            var _iteratorError13 = undefined;
-
-            try {
-                for (var _iterator13 = this.edges[Symbol.iterator](), _step13; !(_iteratorNormalCompletion13 = (_step13 = _iterator13.next()).done); _iteratorNormalCompletion13 = true) {
-                    var _ref21 = _step13.value;
-
-                    var _ref22 = _slicedToArray(_ref21, 2);
-
-                    var _u3 = _ref22[0];
-                    var sinks = _ref22[1];
-                    var _iteratorNormalCompletion17 = true;
-                    var _didIteratorError17 = false;
-                    var _iteratorError17 = undefined;
-
-                    try {
-                        for (var _iterator17 = sinks[Symbol.iterator](), _step17; !(_iteratorNormalCompletion17 = (_step17 = _iterator17.next()).done); _iteratorNormalCompletion17 = true) {
-                            var _ref27 = _step17.value;
-
-                            var _ref28 = _slicedToArray(_ref27, 2);
-
-                            var _v11 = _ref28[0];
-                            var _d7 = _ref28[1];
-
-                            rev_edges.get(_v11).set(_u3, {});
-                        }
-                    } catch (err) {
-                        _didIteratorError17 = true;
-                        _iteratorError17 = err;
-                    } finally {
-                        try {
-                            if (!_iteratorNormalCompletion17 && _iterator17.return) {
-                                _iterator17.return();
-                            }
-                        } finally {
-                            if (_didIteratorError17) {
-                                throw _iteratorError17;
-                            }
-                        }
-                    }
-                }
-            } catch (err) {
-                _didIteratorError13 = true;
-                _iteratorError13 = err;
-            } finally {
-                try {
-                    if (!_iteratorNormalCompletion13 && _iterator13.return) {
-                        _iterator13.return();
-                    }
-                } finally {
-                    if (_didIteratorError13) {
-                        throw _iteratorError13;
-                    }
-                }
-            }
-
-            var search_nodes = new Set();
-            var _iteratorNormalCompletion14 = true;
-            var _didIteratorError14 = false;
-            var _iteratorError14 = undefined;
-
-            try {
-                for (var _iterator14 = this.nodes.keys()[Symbol.iterator](), _step14; !(_iteratorNormalCompletion14 = (_step14 = _iterator14.next()).done); _iteratorNormalCompletion14 = true) {
-                    var _u4 = _step14.value;
-
-                    search_nodes.add(_u4);
-                }
-
-                // DFS for now, since it's easier
-            } catch (err) {
-                _didIteratorError14 = true;
-                _iteratorError14 = err;
-            } finally {
-                try {
-                    if (!_iteratorNormalCompletion14 && _iterator14.return) {
-                        _iterator14.return();
-                    }
-                } finally {
-                    if (_didIteratorError14) {
-                        throw _iteratorError14;
-                    }
-                }
-            }
-
             var search_stack = [];
             var components = [];
 
@@ -783,66 +566,66 @@ var DiGraph = function () {
                     var node = search_stack.pop();
                     search_nodes.delete(node);
                     G.addNode(node);
-                    var _iteratorNormalCompletion15 = true;
-                    var _didIteratorError15 = false;
-                    var _iteratorError15 = undefined;
+                    var _iteratorNormalCompletion13 = true;
+                    var _didIteratorError13 = false;
+                    var _iteratorError13 = undefined;
 
                     try {
-                        for (var _iterator15 = this.edges.get(node)[Symbol.iterator](), _step15; !(_iteratorNormalCompletion15 = (_step15 = _iterator15.next()).done); _iteratorNormalCompletion15 = true) {
-                            var _ref23 = _step15.value;
+                        for (var _iterator13 = this.edges.get(node)[Symbol.iterator](), _step13; !(_iteratorNormalCompletion13 = (_step13 = _iterator13.next()).done); _iteratorNormalCompletion13 = true) {
+                            var _ref19 = _step13.value;
 
-                            var _ref24 = _slicedToArray(_ref23, 2);
+                            var _ref20 = _slicedToArray(_ref19, 2);
 
-                            var _v9 = _ref24[0];
-                            var _d5 = _ref24[1];
+                            var _v8 = _ref20[0];
+                            var d = _ref20[1];
+
+                            if (search_nodes.has(_v8)) {
+                                search_stack.push(_v8);
+                            }
+                        }
+                    } catch (err) {
+                        _didIteratorError13 = true;
+                        _iteratorError13 = err;
+                    } finally {
+                        try {
+                            if (!_iteratorNormalCompletion13 && _iterator13.return) {
+                                _iterator13.return();
+                            }
+                        } finally {
+                            if (_didIteratorError13) {
+                                throw _iteratorError13;
+                            }
+                        }
+                    }
+
+                    var _iteratorNormalCompletion14 = true;
+                    var _didIteratorError14 = false;
+                    var _iteratorError14 = undefined;
+
+                    try {
+                        for (var _iterator14 = rev_edges.get(node)[Symbol.iterator](), _step14; !(_iteratorNormalCompletion14 = (_step14 = _iterator14.next()).done); _iteratorNormalCompletion14 = true) {
+                            var _ref21 = _step14.value;
+
+                            var _ref22 = _slicedToArray(_ref21, 2);
+
+                            var _v9 = _ref22[0];
+                            var _d4 = _ref22[1];
 
                             if (search_nodes.has(_v9)) {
                                 search_stack.push(_v9);
                             }
                         }
                     } catch (err) {
-                        _didIteratorError15 = true;
-                        _iteratorError15 = err;
+                        _didIteratorError14 = true;
+                        _iteratorError14 = err;
                     } finally {
                         try {
-                            if (!_iteratorNormalCompletion15 && _iterator15.return) {
-                                _iterator15.return();
+                            if (!_iteratorNormalCompletion14 && _iterator14.return) {
+                                _iterator14.return();
                             }
                         } finally {
-                            if (_didIteratorError15) {
-                                throw _iteratorError15;
-                            }
-                        }
-                    }
-
-                    var _iteratorNormalCompletion16 = true;
-                    var _didIteratorError16 = false;
-                    var _iteratorError16 = undefined;
-
-                    try {
-                        for (var _iterator16 = rev_edges.get(node)[Symbol.iterator](), _step16; !(_iteratorNormalCompletion16 = (_step16 = _iterator16.next()).done); _iteratorNormalCompletion16 = true) {
-                            var _ref25 = _step16.value;
-
-                            var _ref26 = _slicedToArray(_ref25, 2);
-
-                            var _v10 = _ref26[0];
-                            var _d6 = _ref26[1];
-
-                            if (search_nodes.has(_v10)) {
-                                search_stack.push(_v10);
-                            }
-                        }
-                    } catch (err) {
-                        _didIteratorError16 = true;
-                        _iteratorError16 = err;
-                    } finally {
-                        try {
-                            if (!_iteratorNormalCompletion16 && _iterator16.return) {
-                                _iterator16.return();
-                            }
-                        } finally {
-                            if (_didIteratorError16) {
-                                throw _iteratorError16;
+                            if (_didIteratorError14) {
+                                throw _iteratorError14;
                             }
                         }
                     }
@@ -867,59 +650,59 @@ var DiGraph = function () {
             console.log(H, T);
 
             var c = [];
-            var _iteratorNormalCompletion18 = true;
-            var _didIteratorError18 = false;
-            var _iteratorError18 = undefined;
+            var _iteratorNormalCompletion15 = true;
+            var _didIteratorError15 = false;
+            var _iteratorError15 = undefined;
 
             try {
-                for (var _iterator18 = H.edges[Symbol.iterator](), _step18; !(_iteratorNormalCompletion18 = (_step18 = _iterator18.next()).done); _iteratorNormalCompletion18 = true) {
-                    var _ref29 = _step18.value;
+                for (var _iterator15 = H.edges[Symbol.iterator](), _step15; !(_iteratorNormalCompletion15 = (_step15 = _iterator15.next()).done); _iteratorNormalCompletion15 = true) {
+                    var _ref23 = _step15.value;
 
-                    var _ref30 = _slicedToArray(_ref29, 2);
+                    var _ref24 = _slicedToArray(_ref23, 2);
 
-                    var _u5 = _ref30[0];
-                    var sinks = _ref30[1];
-                    var _iteratorNormalCompletion25 = true;
-                    var _didIteratorError25 = false;
-                    var _iteratorError25 = undefined;
+                    var _u4 = _ref24[0];
+                    var sinks = _ref24[1];
+                    var _iteratorNormalCompletion22 = true;
+                    var _didIteratorError22 = false;
+                    var _iteratorError22 = undefined;
 
                     try {
-                        for (var _iterator25 = sinks[Symbol.iterator](), _step25; !(_iteratorNormalCompletion25 = (_step25 = _iterator25.next()).done); _iteratorNormalCompletion25 = true) {
-                            var _ref37 = _step25.value;
+                        for (var _iterator22 = sinks[Symbol.iterator](), _step22; !(_iteratorNormalCompletion22 = (_step22 = _iterator22.next()).done); _iteratorNormalCompletion22 = true) {
+                            var _ref31 = _step22.value;
 
-                            var _ref38 = _slicedToArray(_ref37, 2);
+                            var _ref32 = _slicedToArray(_ref31, 2);
 
-                            var _v17 = _ref38[0];
-                            var _d8 = _ref38[1];
+                            var _v15 = _ref32[0];
+                            var _d5 = _ref32[1];
 
-                            c[[_u5, _v17]] = _.get(_d8, 'weight', 0);
+                            c[[_u4, _v15]] = _.get(_d5, 'weight', 0);
                         }
                     } catch (err) {
-                        _didIteratorError25 = true;
-                        _iteratorError25 = err;
+                        _didIteratorError22 = true;
+                        _iteratorError22 = err;
                     } finally {
                         try {
-                            if (!_iteratorNormalCompletion25 && _iterator25.return) {
-                                _iterator25.return();
+                            if (!_iteratorNormalCompletion22 && _iterator22.return) {
+                                _iterator22.return();
                             }
                         } finally {
-                            if (_didIteratorError25) {
-                                throw _iteratorError25;
+                            if (_didIteratorError22) {
+                                throw _iteratorError22;
                             }
                         }
                     }
                 }
             } catch (err) {
-                _didIteratorError18 = true;
-                _iteratorError18 = err;
+                _didIteratorError15 = true;
+                _iteratorError15 = err;
             } finally {
                 try {
-                    if (!_iteratorNormalCompletion18 && _iterator18.return) {
-                        _iterator18.return();
+                    if (!_iteratorNormalCompletion15 && _iterator15.return) {
+                        _iterator15.return();
                     }
                 } finally {
-                    if (_didIteratorError18) {
-                        throw _iteratorError18;
+                    if (_didIteratorError15) {
+                        throw _iteratorError15;
                     }
                 }
             }
@@ -939,9 +722,9 @@ var DiGraph = function () {
 
                 var join = r;
 
-                for (var _i3 = 1; _i3 < path1.length; _i3++) {
-                    var node = path1[_i3];
-                    if (_i3 + 1 < path2.length && node == path2[_i3 + 1]) {
+                for (var _i = 1; _i < path1.length; _i++) {
+                    var node = path1[_i];
+                    if (_i + 1 < path2.length && node == path2[_i + 1]) {
                         join = node;
                     } else {
                         break;
@@ -975,11 +758,11 @@ var DiGraph = function () {
                         }
 
                         var _newEdge = _slicedToArray(newEdge, 2),
-                            _u6 = _newEdge[0],
-                            _v12 = _newEdge[1];
+                            _u5 = _newEdge[0],
+                            _v10 = _newEdge[1];
 
-                        _.set(H.getEdge(_u6, _v12), _.get(H.getEdge(_u6, _v12), "flow", 0) + eps);
-                        _.set(H.getEdge(_v12, _u6), _.get(H.getEdge(_v12, _u6), "flow", 0) + eps);
+                        _.set(H.getEdge(_u5, _v10), _.get(H.getEdge(_u5, _v10), "flow", 0) + eps);
+                        _.set(H.getEdge(_v10, _u5), _.get(H.getEdge(_v10, _u5), "flow", 0) + eps);
                     } else {
                         for (var j = 0; j < cycle.length - 1; j++) {
                             v = cycle[i + 1];
@@ -1011,132 +794,231 @@ var DiGraph = function () {
                     }
 
                     if (R.nodes.has(newEdge[0])) {
-                        var _iteratorNormalCompletion19 = true;
-                        var _didIteratorError19 = false;
-                        var _iteratorError19 = undefined;
+                        var _iteratorNormalCompletion16 = true;
+                        var _didIteratorError16 = false;
+                        var _iteratorError16 = undefined;
 
                         try {
-                            for (var _iterator19 = notR.nodes.keys()[Symbol.iterator](), _step19; !(_iteratorNormalCompletion19 = (_step19 = _iterator19.next()).done); _iteratorNormalCompletion19 = true) {
-                                var _v13 = _step19.value;
+                            for (var _iterator16 = notR.nodes.keys()[Symbol.iterator](), _step16; !(_iteratorNormalCompletion16 = (_step16 = _iterator16.next()).done); _iteratorNormalCompletion16 = true) {
+                                var _v11 = _step16.value;
 
-                                y[_v13] += c[newEdge];
+                                y[_v11] += c[newEdge];
                             }
                         } catch (err) {
-                            _didIteratorError19 = true;
-                            _iteratorError19 = err;
+                            _didIteratorError16 = true;
+                            _iteratorError16 = err;
                         } finally {
                             try {
-                                if (!_iteratorNormalCompletion19 && _iterator19.return) {
-                                    _iterator19.return();
+                                if (!_iteratorNormalCompletion16 && _iterator16.return) {
+                                    _iterator16.return();
                                 }
                             } finally {
-                                if (_didIteratorError19) {
-                                    throw _iteratorError19;
+                                if (_didIteratorError16) {
+                                    throw _iteratorError16;
                                 }
                             }
                         }
                     } else {
-                        var _iteratorNormalCompletion20 = true;
-                        var _didIteratorError20 = false;
-                        var _iteratorError20 = undefined;
+                        var _iteratorNormalCompletion17 = true;
+                        var _didIteratorError17 = false;
+                        var _iteratorError17 = undefined;
 
                         try {
-                            for (var _iterator20 = notR.nodes.keys()[Symbol.iterator](), _step20; !(_iteratorNormalCompletion20 = (_step20 = _iterator20.next()).done); _iteratorNormalCompletion20 = true) {
-                                var _v14 = _step20.value;
+                            for (var _iterator17 = notR.nodes.keys()[Symbol.iterator](), _step17; !(_iteratorNormalCompletion17 = (_step17 = _iterator17.next()).done); _iteratorNormalCompletion17 = true) {
+                                var _v12 = _step17.value;
 
-                                y[_v14] -= c[newEdge];
+                                y[_v12] -= c[newEdge];
                             }
                         } catch (err) {
-                            _didIteratorError20 = true;
-                            _iteratorError20 = err;
+                            _didIteratorError17 = true;
+                            _iteratorError17 = err;
                         } finally {
                             try {
-                                if (!_iteratorNormalCompletion20 && _iterator20.return) {
-                                    _iterator20.return();
+                                if (!_iteratorNormalCompletion17 && _iterator17.return) {
+                                    _iterator17.return();
                                 }
                             } finally {
-                                if (_didIteratorError20) {
-                                    throw _iteratorError20;
+                                if (_didIteratorError17) {
+                                    throw _iteratorError17;
                                 }
                             }
                         }
                     }
 
-                    var _iteratorNormalCompletion21 = true;
-                    var _didIteratorError21 = false;
-                    var _iteratorError21 = undefined;
+                    var _iteratorNormalCompletion18 = true;
+                    var _didIteratorError18 = false;
+                    var _iteratorError18 = undefined;
 
                     try {
-                        for (var _iterator21 = H.edges[Symbol.iterator](), _step21; !(_iteratorNormalCompletion21 = (_step21 = _iterator21.next()).done); _iteratorNormalCompletion21 = true) {
-                            var _ref31 = _step21.value;
+                        for (var _iterator18 = H.edges[Symbol.iterator](), _step18; !(_iteratorNormalCompletion18 = (_step18 = _iterator18.next()).done); _iteratorNormalCompletion18 = true) {
+                            var _ref25 = _step18.value;
 
-                            var _ref32 = _slicedToArray(_ref31, 2);
+                            var _ref26 = _slicedToArray(_ref25, 2);
 
-                            var _u7 = _ref32[0];
-                            var _sinks = _ref32[1];
-                            var _iteratorNormalCompletion22 = true;
-                            var _didIteratorError22 = false;
-                            var _iteratorError22 = undefined;
+                            var _u6 = _ref26[0];
+                            var _sinks = _ref26[1];
+                            var _iteratorNormalCompletion19 = true;
+                            var _didIteratorError19 = false;
+                            var _iteratorError19 = undefined;
 
                             try {
-                                for (var _iterator22 = _sinks[Symbol.iterator](), _step22; !(_iteratorNormalCompletion22 = (_step22 = _iterator22.next()).done); _iteratorNormalCompletion22 = true) {
-                                    var _ref33 = _step22.value;
+                                for (var _iterator19 = _sinks[Symbol.iterator](), _step19; !(_iteratorNormalCompletion19 = (_step19 = _iterator19.next()).done); _iteratorNormalCompletion19 = true) {
+                                    var _ref27 = _step19.value;
 
-                                    var _ref34 = _slicedToArray(_ref33, 2);
+                                    var _ref28 = _slicedToArray(_ref27, 2);
 
-                                    var _v15 = _ref34[0];
-                                    var d = _ref34[1];
+                                    var _v13 = _ref28[0];
+                                    var d = _ref28[1];
 
-                                    if (notR.nodes.has(_u7) || notR.nodes.has(_v15)) {
-                                        c[[_u7, _v15]] = _.get(H.getEdge(_u7, _v15), "weight", 0) + y[_u7] - y[_v15];
+                                    if (notR.nodes.has(_u6) || notR.nodes.has(_v13)) {
+                                        c[[_u6, _v13]] = _.get(H.getEdge(_u6, _v13), "weight", 0) + y[_u6] - y[_v13];
                                     }
                                 }
                             } catch (err) {
-                                _didIteratorError22 = true;
-                                _iteratorError22 = err;
+                                _didIteratorError19 = true;
+                                _iteratorError19 = err;
                             } finally {
                                 try {
-                                    if (!_iteratorNormalCompletion22 && _iterator22.return) {
-                                        _iterator22.return();
+                                    if (!_iteratorNormalCompletion19 && _iterator19.return) {
+                                        _iterator19.return();
                                     }
                                 } finally {
-                                    if (_didIteratorError22) {
-                                        throw _iteratorError22;
+                                    if (_didIteratorError19) {
+                                        throw _iteratorError19;
                                     }
                                 }
                             }
                         }
                     } catch (err) {
-                        _didIteratorError21 = true;
-                        _iteratorError21 = err;
+                        _didIteratorError18 = true;
+                        _iteratorError18 = err;
                     } finally {
                         try {
-                            if (!_iteratorNormalCompletion21 && _iterator21.return) {
-                                _iterator21.return();
+                            if (!_iteratorNormalCompletion18 && _iterator18.return) {
+                                _iterator18.return();
                             }
                         } finally {
-                            if (_didIteratorError21) {
-                                throw _iteratorError21;
+                            if (_didIteratorError18) {
+                                throw _iteratorError18;
                             }
                         }
                     }
                 }
             }
 
+            var _iteratorNormalCompletion20 = true;
+            var _didIteratorError20 = false;
+            var _iteratorError20 = undefined;
+
+            try {
+                for (var _iterator20 = artificialEdges[Symbol.iterator](), _step20; !(_iteratorNormalCompletion20 = (_step20 = _iterator20.next()).done); _iteratorNormalCompletion20 = true) {
+                    var _ref29 = _step20.value;
+
+                    var _ref30 = _slicedToArray(_ref29, 2);
+
+                    var _u7 = _ref30[0];
+                    var _v14 = _ref30[1];
+
+                    H.removeEdge(_u7, _v14);
+                }
+            } catch (err) {
+                _didIteratorError20 = true;
+                _iteratorError20 = err;
+            } finally {
+                try {
+                    if (!_iteratorNormalCompletion20 && _iterator20.return) {
+                        _iterator20.return();
+                    }
+                } finally {
+                    if (_didIteratorError20) {
+                        throw _iteratorError20;
+                    }
+                }
+            }
+
+            var _iteratorNormalCompletion21 = true;
+            var _didIteratorError21 = false;
+            var _iteratorError21 = undefined;
+
+            try {
+                for (var _iterator21 = H.nodes.keys()[Symbol.iterator](), _step21; !(_iteratorNormalCompletion21 = (_step21 = _iterator21.next()).done); _iteratorNormalCompletion21 = true) {
+                    var _u8 = _step21.value;
+
+                    if (!this.nodes.has(_u8)) {
+                        H.removeNode(_u8);
+                    }
+                }
+            } catch (err) {
+                _didIteratorError21 = true;
+                _iteratorError21 = err;
+            } finally {
+                try {
+                    if (!_iteratorNormalCompletion21 && _iterator21.return) {
+                        _iterator21.return();
+                    }
+                } finally {
+                    if (_didIteratorError21) {
+                        throw _iteratorError21;
+                    }
+                }
+            }
+
+            var flowDict = this._createFlowDict(H);
+
+            return [flowCost, flowDict];
+        }
+    }, {
+        key: '_createFlowDict',
+        value: function _createFlowDict(H) {
+            var flowDict = new Map();
+
             var _iteratorNormalCompletion23 = true;
             var _didIteratorError23 = false;
             var _iteratorError23 = undefined;
 
             try {
-                for (var _iterator23 = artificialEdges[Symbol.iterator](), _step23; !(_iteratorNormalCompletion23 = (_step23 = _iterator23.next()).done); _iteratorNormalCompletion23 = true) {
-                    var _ref35 = _step23.value;
+                for (var _iterator23 = this.edges[Symbol.iterator](), _step23; !(_iteratorNormalCompletion23 = (_step23 = _iterator23.next()).done); _iteratorNormalCompletion23 = true) {
+                    var _ref33 = _step23.value;
 
-                    var _ref36 = _slicedToArray(_ref35, 2);
+                    var _ref34 = _slicedToArray(_ref33, 2);
 
-                    var _u8 = _ref36[0];
-                    var _v16 = _ref36[1];
+                    var _u9 = _ref34[0];
+                    var sinks = _ref34[1];
 
-                    H.removeEdge(_u8, _v16);
+                    flowDict.set(_u9, new Map());
+                    var _iteratorNormalCompletion24 = true;
+                    var _didIteratorError24 = false;
+                    var _iteratorError24 = undefined;
+
+                    try {
+                        for (var _iterator24 = sinks[Symbol.iterator](), _step24; !(_iteratorNormalCompletion24 = (_step24 = _iterator24.next()).done); _iteratorNormalCompletion24 = true) {
+                            var _ref35 = _step24.value;
+
+                            var _ref36 = _slicedToArray(_ref35, 2);
+
+                            var _v16 = _ref36[0];
+                            var d = _ref36[1];
+
+                            if (H.hasEdge(_u9, _v16)) {
+                                flowDict.get(_u9).set(_v16, _.get(d, "flow", 0));
+                            } else {
+                                flowDict.get(_u9).set(_v16, 0);
+                            }
+                        }
+                    } catch (err) {
+                        _didIteratorError24 = true;
+                        _iteratorError24 = err;
+                    } finally {
+                        try {
+                            if (!_iteratorNormalCompletion24 && _iterator24.return) {
+                                _iterator24.return();
+                            }
+                        } finally {
+                            if (_didIteratorError24) {
+                                throw _iteratorError24;
+                            }
+                        }
+                    }
                 }
             } catch (err) {
                 _didIteratorError23 = true;
@@ -1153,88 +1035,89 @@ var DiGraph = function () {
                 }
             }
 
-            var _iteratorNormalCompletion24 = true;
-            var _didIteratorError24 = false;
-            var _iteratorError24 = undefined;
+            return flowDict;
+        }
+    }, {
+        key: '_initialTreeSolution',
+        value: function _initialTreeSolution() {
+            var H = new DiGraph();
+
+            var maxWeight = 0;
+            var _iteratorNormalCompletion25 = true;
+            var _didIteratorError25 = false;
+            var _iteratorError25 = undefined;
 
             try {
-                for (var _iterator24 = H.nodes.keys()[Symbol.iterator](), _step24; !(_iteratorNormalCompletion24 = (_step24 = _iterator24.next()).done); _iteratorNormalCompletion24 = true) {
-                    var _u9 = _step24.value;
+                for (var _iterator25 = this.edges[Symbol.iterator](), _step25; !(_iteratorNormalCompletion25 = (_step25 = _iterator25.next()).done); _iteratorNormalCompletion25 = true) {
+                    var _ref37 = _step25.value;
 
-                    if (!this.nodes.has(_u9)) {
-                        H.removeNode(_u9);
+                    var _ref38 = _slicedToArray(_ref37, 2);
+
+                    var _u10 = _ref38[0];
+                    var sinks = _ref38[1];
+                    var _iteratorNormalCompletion28 = true;
+                    var _didIteratorError28 = false;
+                    var _iteratorError28 = undefined;
+
+                    try {
+                        for (var _iterator28 = sinks[Symbol.iterator](), _step28; !(_iteratorNormalCompletion28 = (_step28 = _iterator28.next()).done); _iteratorNormalCompletion28 = true) {
+                            var _ref43 = _step28.value;
+
+                            var _ref44 = _slicedToArray(_ref43, 2);
+
+                            var _v18 = _ref44[0];
+                            var _d7 = _ref44[1];
+
+                            if (_.get(_d7, 'capacity', 1) > 0) {
+                                H.addEdge(_u10, _v18, _d7);
+                                maxWeight = Math.max(maxWeight, _.get(_d7, 'weight', 0));
+                            }
+                        }
+                    } catch (err) {
+                        _didIteratorError28 = true;
+                        _iteratorError28 = err;
+                    } finally {
+                        try {
+                            if (!_iteratorNormalCompletion28 && _iterator28.return) {
+                                _iterator28.return();
+                            }
+                        } finally {
+                            if (_didIteratorError28) {
+                                throw _iteratorError28;
+                            }
+                        }
                     }
                 }
             } catch (err) {
-                _didIteratorError24 = true;
-                _iteratorError24 = err;
+                _didIteratorError25 = true;
+                _iteratorError25 = err;
             } finally {
                 try {
-                    if (!_iteratorNormalCompletion24 && _iterator24.return) {
-                        _iterator24.return();
+                    if (!_iteratorNormalCompletion25 && _iterator25.return) {
+                        _iterator25.return();
                     }
                 } finally {
-                    if (_didIteratorError24) {
-                        throw _iteratorError24;
+                    if (_didIteratorError25) {
+                        throw _iteratorError25;
                     }
                 }
             }
-
-            var flowDict = this._createFlowDict(H);
-
-            return [flowCost, flowDict];
-        }
-    }, {
-        key: '_createFlowDict',
-        value: function _createFlowDict(H) {
-            var flowDict = new Map();
 
             var _iteratorNormalCompletion26 = true;
             var _didIteratorError26 = false;
             var _iteratorError26 = undefined;
 
             try {
-                for (var _iterator26 = this.edges[Symbol.iterator](), _step26; !(_iteratorNormalCompletion26 = (_step26 = _iterator26.next()).done); _iteratorNormalCompletion26 = true) {
+                for (var _iterator26 = this.nodes[Symbol.iterator](), _step26; !(_iteratorNormalCompletion26 = (_step26 = _iterator26.next()).done); _iteratorNormalCompletion26 = true) {
                     var _ref39 = _step26.value;
 
                     var _ref40 = _slicedToArray(_ref39, 2);
 
-                    var _u10 = _ref40[0];
-                    var sinks = _ref40[1];
+                    var _n = _ref40[0];
+                    var d = _ref40[1];
 
-                    flowDict.set(_u10, new Map());
-                    var _iteratorNormalCompletion27 = true;
-                    var _didIteratorError27 = false;
-                    var _iteratorError27 = undefined;
-
-                    try {
-                        for (var _iterator27 = sinks[Symbol.iterator](), _step27; !(_iteratorNormalCompletion27 = (_step27 = _iterator27.next()).done); _iteratorNormalCompletion27 = true) {
-                            var _ref41 = _step27.value;
-
-                            var _ref42 = _slicedToArray(_ref41, 2);
-
-                            var _v18 = _ref42[0];
-                            var d = _ref42[1];
-
-                            if (H.hasEdge(_u10, _v18)) {
-                                flowDict.get(_u10).set(_v18, _.get(d, "flow", 0));
-                            } else {
-                                flowDict.get(_u10).set(_v18, 0);
-                            }
-                        }
-                    } catch (err) {
-                        _didIteratorError27 = true;
-                        _iteratorError27 = err;
-                    } finally {
-                        try {
-                            if (!_iteratorNormalCompletion27 && _iterator27.return) {
-                                _iterator27.return();
-                            }
-                        } finally {
-                            if (_didIteratorError27) {
-                                throw _iteratorError27;
-                            }
-                        }
+                    if (_.get(d, 'demand', 0) != 0) {
+                        H.addNode(_n, d);
                     }
                 }
             } catch (err) {
@@ -1248,106 +1131,6 @@ var DiGraph = function () {
                 } finally {
                     if (_didIteratorError26) {
                         throw _iteratorError26;
-                    }
-                }
-            }
-
-            return flowDict;
-        }
-    }, {
-        key: '_initialTreeSolution',
-        value: function _initialTreeSolution() {
-            var H = new DiGraph();
-
-            var maxWeight = 0;
-            var _iteratorNormalCompletion28 = true;
-            var _didIteratorError28 = false;
-            var _iteratorError28 = undefined;
-
-            try {
-                for (var _iterator28 = this.edges[Symbol.iterator](), _step28; !(_iteratorNormalCompletion28 = (_step28 = _iterator28.next()).done); _iteratorNormalCompletion28 = true) {
-                    var _ref43 = _step28.value;
-
-                    var _ref44 = _slicedToArray(_ref43, 2);
-
-                    var _u11 = _ref44[0];
-                    var sinks = _ref44[1];
-                    var _iteratorNormalCompletion31 = true;
-                    var _didIteratorError31 = false;
-                    var _iteratorError31 = undefined;
-
-                    try {
-                        for (var _iterator31 = sinks[Symbol.iterator](), _step31; !(_iteratorNormalCompletion31 = (_step31 = _iterator31.next()).done); _iteratorNormalCompletion31 = true) {
-                            var _ref49 = _step31.value;
-
-                            var _ref50 = _slicedToArray(_ref49, 2);
-
-                            var _v20 = _ref50[0];
-                            var _d10 = _ref50[1];
-
-                            if (_.get(_d10, 'capacity', 1) > 0) {
-                                H.addEdge(_u11, _v20, _d10);
-                                maxWeight = Math.max(maxWeight, _.get(_d10, 'weight', 0));
-                            }
-                        }
-                    } catch (err) {
-                        _didIteratorError31 = true;
-                        _iteratorError31 = err;
-                    } finally {
-                        try {
-                            if (!_iteratorNormalCompletion31 && _iterator31.return) {
-                                _iterator31.return();
-                            }
-                        } finally {
-                            if (_didIteratorError31) {
-                                throw _iteratorError31;
-                            }
-                        }
-                    }
-                }
-            } catch (err) {
-                _didIteratorError28 = true;
-                _iteratorError28 = err;
-            } finally {
-                try {
-                    if (!_iteratorNormalCompletion28 && _iterator28.return) {
-                        _iterator28.return();
-                    }
-                } finally {
-                    if (_didIteratorError28) {
-                        throw _iteratorError28;
-                    }
-                }
-            }
-
-            var _iteratorNormalCompletion29 = true;
-            var _didIteratorError29 = false;
-            var _iteratorError29 = undefined;
-
-            try {
-                for (var _iterator29 = this.nodes[Symbol.iterator](), _step29; !(_iteratorNormalCompletion29 = (_step29 = _iterator29.next()).done); _iteratorNormalCompletion29 = true) {
-                    var _ref45 = _step29.value;
-
-                    var _ref46 = _slicedToArray(_ref45, 2);
-
-                    var _n = _ref46[0];
-                    var d = _ref46[1];
-
-                    if (_.get(d, 'demand', 0) != 0) {
-                        H.addNode(_n, d);
-                    }
-                }
-            } catch (err) {
-                _didIteratorError29 = true;
-                _iteratorError29 = err;
-            } finally {
-                try {
-                    if (!_iteratorNormalCompletion29 && _iterator29.return) {
-                        _iterator29.return();
-                    }
-                } finally {
-                    if (_didIteratorError29) {
-                        throw _iteratorError29;
                     }
                 }
             }
@@ -1366,72 +1149,72 @@ var DiGraph = function () {
             var n = H.nodes.size;
             var hugeWeight = 1 + n * maxWeight;
 
-            var _iteratorNormalCompletion30 = true;
-            var _didIteratorError30 = false;
-            var _iteratorError30 = undefined;
+            var _iteratorNormalCompletion27 = true;
+            var _didIteratorError27 = false;
+            var _iteratorError27 = undefined;
 
             try {
-                for (var _iterator30 = nodeIter[Symbol.iterator](), _step30; !(_iteratorNormalCompletion30 = (_step30 = _iterator30.next()).done); _iteratorNormalCompletion30 = true) {
-                    var _ref47 = _step30.value;
+                for (var _iterator27 = nodeIter[Symbol.iterator](), _step27; !(_iteratorNormalCompletion27 = (_step27 = _iterator27.next()).done); _iteratorNormalCompletion27 = true) {
+                    var _ref41 = _step27.value;
 
-                    var _ref48 = _slicedToArray(_ref47, 2);
+                    var _ref42 = _slicedToArray(_ref41, 2);
 
-                    var _v19 = _ref48[0];
-                    var _d9 = _ref48[1];
+                    var _v17 = _ref42[0];
+                    var _d6 = _ref42[1];
 
-                    var vDemand = _.get(_d9, 'demand', 0);
+                    var vDemand = _.get(_d6, 'demand', 0);
                     if (vDemand >= 0) {
-                        if (!H.hasEdge(r, _v19)) {
-                            H.addEdge(r, _v19, { weight: hugeWeight, flow: vDemand });
-                            artificialEdges.push([r, _v19]);
-                            y[_v19] = hugeWeight;
-                            T.addEdge(r, _v19);
+                        if (!H.hasEdge(r, _v17)) {
+                            H.addEdge(r, _v17, { weight: hugeWeight, flow: vDemand });
+                            artificialEdges.push([r, _v17]);
+                            y[_v17] = hugeWeight;
+                            T.addEdge(r, _v17);
                             flowCost += vDemand * hugeWeight;
                         } else {
-                            if (!"capacity" in H.getEdge(r, _v19) || vDemand <= H.getEdge(r, _v19).capacity) {
-                                H.getEdge(r, _v19).flow = vDemand;
-                                y[_v19] = _.get(H.getEdge(r, _v19), "weight", 0);
-                                T.addEdge(r, _v19);
-                                flowCost += vDemand * y[_v19];
+                            if (!"capacity" in H.getEdge(r, _v17) || vDemand <= H.getEdge(r, _v17).capacity) {
+                                H.getEdge(r, _v17).flow = vDemand;
+                                y[_v17] = _.get(H.getEdge(r, _v17), "weight", 0);
+                                T.addEdge(r, _v17);
+                                flowCost += vDemand * y[_v17];
                             } else {
                                 var newLabel = -H.nodes.size;
                                 console.log(newLabel);
                                 H.addEdge(r, newLabel, { weight: hugeWeight, flow: vDemand });
-                                H.addEdge(newLabel, _v19, { weight: hugeWeight, flow: vDemand });
+                                H.addEdge(newLabel, _v17, { weight: hugeWeight, flow: vDemand });
                                 artificialEdges.push([r, newLabel]);
-                                artificialEdges.push([newLabel, _v19]);
-                                y[_v19] = 2 * hugeWeight;
+                                artificialEdges.push([newLabel, _v17]);
+                                y[_v17] = 2 * hugeWeight;
                                 y[newLabel] = hugeWeight;
                                 T.addEdge(r, newLabel);
-                                T.addEdge(newLabel, _v19);
-                                flowCost += vDemand * y[_v19];
+                                T.addEdge(newLabel, _v17);
+                                flowCost += vDemand * y[_v17];
                             }
                         }
                     } else {
                         // vDemand < 0
-                        if (!H.hasEdge(_v19, r)) {
-                            H.addEdge(_v19, r, { weight: hugeWeight, flow: -vDemand });
-                            artificialEdges.push([_v19, r]);
-                            y[_v19] = -hugeWeight;
-                            T.addEdge(_v19, r);
+                        if (!H.hasEdge(_v17, r)) {
+                            H.addEdge(_v17, r, { weight: hugeWeight, flow: -vDemand });
+                            artificialEdges.push([_v17, r]);
+                            y[_v17] = -hugeWeight;
+                            T.addEdge(_v17, r);
                             flowCost += vDemand * hugeWeight;
                         } else {
-                            if (!"capacity" in H.getEdge(_v19, r) || -vDemand <= H.getEdge(_v19, r).capacity) {
-                                H.getEdge(_v19, r).flow = vDemand;
-                                y[_v19] = -_.get(H.getEdge(_v19, r), "weight", 0);
-                                T.add_edge(_v19, r);
-                                flowCost += vDemand * y[_v19];
+                            if (!"capacity" in H.getEdge(_v17, r) || -vDemand <= H.getEdge(_v17, r).capacity) {
+                                H.getEdge(_v17, r).flow = vDemand;
+                                y[_v17] = -_.get(H.getEdge(_v17, r), "weight", 0);
+                                T.add_edge(_v17, r);
+                                flowCost += vDemand * y[_v17];
                             } else {
                                 var _newLabel = -H.nodes.size;
-                                H.addEdge(_v19, _newLabel, { weight: hugeWeight, flow: -vDemand });
+                                H.addEdge(_v17, _newLabel, { weight: hugeWeight, flow: -vDemand });
                                 H.addEdge(_newLabel, r, { weight: hugeWeight, flow: -vDemand });
-                                artificialEdges.push([_v19, _newLabel]);
+                                artificialEdges.push([_v17, _newLabel]);
                                 artificialEdges.push([_newLabel, r]);
-                                y[_v19] = -2 * hugeWeight;
+                                y[_v17] = -2 * hugeWeight;
                                 y[_newLabel] = -hugeWeight;
-                                T.addEdge(_v19, _newLabel);
+                                T.addEdge(_v17, _newLabel);
                                 T.addEdge(_newLabel, r);
-                                flowCost += vDemand * y[_v19];
+                                flowCost += vDemand * y[_v17];
                             }
                         }
                     }
@@ -1439,16 +1222,16 @@ var DiGraph = function () {
                     return [H, T, y, artificialEdges, flowCost, r];
                 }
             } catch (err) {
-                _didIteratorError30 = true;
-                _iteratorError30 = err;
+                _didIteratorError27 = true;
+                _iteratorError27 = err;
             } finally {
                 try {
-                    if (!_iteratorNormalCompletion30 && _iterator30.return) {
-                        _iterator30.return();
+                    if (!_iteratorNormalCompletion27 && _iterator27.return) {
+                        _iterator27.return();
                     }
                 } finally {
-                    if (_didIteratorError30) {
-                        throw _iteratorError30;
+                    if (_didIteratorError27) {
+                        throw _iteratorError27;
                     }
                 }
             }
@@ -1459,69 +1242,69 @@ var DiGraph = function () {
             var newEdge = [];
 
             console.log("-->", this.edges);
-            var _iteratorNormalCompletion32 = true;
-            var _didIteratorError32 = false;
-            var _iteratorError32 = undefined;
+            var _iteratorNormalCompletion29 = true;
+            var _didIteratorError29 = false;
+            var _iteratorError29 = undefined;
 
             try {
-                for (var _iterator32 = this.edges[Symbol.iterator](), _step32; !(_iteratorNormalCompletion32 = (_step32 = _iterator32.next()).done); _iteratorNormalCompletion32 = true) {
-                    var _ref51 = _step32.value;
+                for (var _iterator29 = this.edges[Symbol.iterator](), _step29; !(_iteratorNormalCompletion29 = (_step29 = _iterator29.next()).done); _iteratorNormalCompletion29 = true) {
+                    var _ref45 = _step29.value;
 
-                    var _ref52 = _slicedToArray(_ref51, 2);
+                    var _ref46 = _slicedToArray(_ref45, 2);
 
-                    var _u12 = _ref52[0];
-                    var sinks = _ref52[1];
-                    var _iteratorNormalCompletion33 = true;
-                    var _didIteratorError33 = false;
-                    var _iteratorError33 = undefined;
+                    var _u11 = _ref46[0];
+                    var sinks = _ref46[1];
+                    var _iteratorNormalCompletion30 = true;
+                    var _didIteratorError30 = false;
+                    var _iteratorError30 = undefined;
 
                     try {
-                        for (var _iterator33 = sinks[Symbol.iterator](), _step33; !(_iteratorNormalCompletion33 = (_step33 = _iterator33.next()).done); _iteratorNormalCompletion33 = true) {
-                            var _ref53 = _step33.value;
+                        for (var _iterator30 = sinks[Symbol.iterator](), _step30; !(_iteratorNormalCompletion30 = (_step30 = _iterator30.next()).done); _iteratorNormalCompletion30 = true) {
+                            var _ref47 = _step30.value;
 
-                            var _ref54 = _slicedToArray(_ref53, 2);
+                            var _ref48 = _slicedToArray(_ref47, 2);
 
-                            var _v21 = _ref54[0];
-                            var d = _ref54[1];
+                            var _v19 = _ref48[0];
+                            var d = _ref48[1];
 
                             if (_.get(d, 'flow', 0) == 0) {
-                                if (c[[_u12, _v21]] < 0) {
-                                    newEdge = [_u12, _v21];
+                                if (c[[_u11, _v19]] < 0) {
+                                    newEdge = [_u11, _v19];
                                     break;
                                 }
                             } else {
-                                if ("capacity" in d && _.get(d, 'flow', 0) == d.capacity && c[[_u12, _v21]] > 0) {
-                                    newEdge = [_u12, _v21];
+                                if ("capacity" in d && _.get(d, 'flow', 0) == d.capacity && c[[_u11, _v19]] > 0) {
+                                    newEdge = [_u11, _v19];
                                     break;
                                 }
                             }
                         }
                     } catch (err) {
-                        _didIteratorError33 = true;
-                        _iteratorError33 = err;
+                        _didIteratorError30 = true;
+                        _iteratorError30 = err;
                     } finally {
                         try {
-                            if (!_iteratorNormalCompletion33 && _iterator33.return) {
-                                _iterator33.return();
+                            if (!_iteratorNormalCompletion30 && _iterator30.return) {
+                                _iterator30.return();
                             }
                         } finally {
-                            if (_didIteratorError33) {
-                                throw _iteratorError33;
+                            if (_didIteratorError30) {
+                                throw _iteratorError30;
                             }
                         }
                     }
                 }
             } catch (err) {
-                _didIteratorError32 = true;
-                _iteratorError32 = err;
+                _didIteratorError29 = true;
+                _iteratorError29 = err;
             } finally {
                 try {
-                    if (!_iteratorNormalCompletion32 && _iterator32.return) {
-                        _iterator32.return();
+                    if (!_iteratorNormalCompletion29 && _iterator29.return) {
+                        _iterator29.return();
                     }
                 } finally {
-                    if (_didIteratorError32) {
-                        throw _iteratorError32;
+                    if (_didIteratorError29) {
+                        throw _iteratorError29;
                     }
                 }
             }
@@ -1536,42 +1319,42 @@ var DiGraph = function () {
 
             if (cycle.length == 3) {
                 var _newEdge2 = _slicedToArray(newEdge, 2),
-                    _u13 = _newEdge2[0],
-                    _v22 = _newEdge2[1];
+                    _u12 = _newEdge2[0],
+                    _v20 = _newEdge2[1];
 
                 if (reverse) {
-                    if (_.get(this.getEdge(_u13, _v22), "flow", 0) > _.get(this.getEdge(_v22, _u13), "flow", 0)) {
-                        return [[_v22, _u13], _.get(this.getEdge(_v22, _u13), "flow", 0)];
+                    if (_.get(this.getEdge(_u12, _v20), "flow", 0) > _.get(this.getEdge(_v20, _u12), "flow", 0)) {
+                        return [[_v20, _u12], _.get(this.getEdge(_v20, _u12), "flow", 0)];
                     } else {
-                        return [[_u13, _v22], _.get(this.getEdge(_u13, _v22), "flow", 0)];
+                        return [[_u12, _v20], _.get(this.getEdge(_u12, _v20), "flow", 0)];
                     }
                 } else {
-                    var uv_res = _.get(this.getEdge(_u13, _v22), "capacity", 0) - _.get(this.getEdge(_u13, _v22), "flow", 0);
-                    var vu_res = _.get(this.getEdge(_v22, _u13), "capacity", 0) - _.get(this.getEdge(_v22, _u13), "flow", 0);
+                    var uv_res = _.get(this.getEdge(_u12, _v20), "capacity", 0) - _.get(this.getEdge(_u12, _v20), "flow", 0);
+                    var vu_res = _.get(this.getEdge(_v20, _u12), "capacity", 0) - _.get(this.getEdge(_v20, _u12), "flow", 0);
 
                     if (uv_res > vu_res) {
-                        return [[_v22, _u13], vu_res];
+                        return [[_v20, _u12], vu_res];
                     } else {
-                        return [[_u13, _v22], uv_res];
+                        return [[_u12, _v20], uv_res];
                     }
                 }
             }
 
-            for (var _i4 = 0; _i4 < cycle.length - 1; _i4++) {
-                var _u14 = cycle[_i4];
+            for (var _i2 = 0; _i2 < cycle.length - 1; _i2++) {
+                var _u13 = cycle[_i2];
 
                 var edgeCapacity = false;
                 var edge = [];
-                var _v23 = cycle[_i4 + 1];
+                var _v21 = cycle[_i2 + 1];
 
-                if ([_u14, _v23] == newEdge || T.hasEdge(_u14, _v23)) {
-                    if ("capacity" in this.getEdge(_u14, _v23)) {
-                        edgeCapacity = this.getEdge(_u14, _v23).capacity - _.get(this.getEdge(_u14, _v23), "flow", 0);
-                        edge = [_u14, _v23];
+                if ([_u13, _v21] == newEdge || T.hasEdge(_u13, _v21)) {
+                    if ("capacity" in this.getEdge(_u13, _v21)) {
+                        edgeCapacity = this.getEdge(_u13, _v21).capacity - _.get(this.getEdge(_u13, _v21), "flow", 0);
+                        edge = [_u13, _v21];
                     }
                 } else {
-                    edgeCapacity = _.get(this.getEdge(_v23, _u14), "flow", 0);
-                    edge = [_v23, _u14];
+                    edgeCapacity = _.get(this.getEdge(_v21, _u13), "flow", 0);
+                    edge = [_v21, _u13];
                 }
 
                 if (edge) {
@@ -1659,30 +1442,30 @@ var OrthogonalDiagramEmbedding = function () {
             var flow = this.faceNetwork.minCostFlow()[1];
             console.log(flow);
 
-            var _iteratorNormalCompletion34 = true;
-            var _didIteratorError34 = false;
-            var _iteratorError34 = undefined;
+            var _iteratorNormalCompletion31 = true;
+            var _didIteratorError31 = false;
+            var _iteratorError31 = undefined;
 
             try {
-                for (var _iterator34 = flow[Symbol.iterator](), _step34; !(_iteratorNormalCompletion34 = (_step34 = _iterator34.next()).done); _iteratorNormalCompletion34 = true) {
-                    var _ref55 = _step34.value;
+                for (var _iterator31 = flow[Symbol.iterator](), _step31; !(_iteratorNormalCompletion31 = (_step31 = _iterator31.next()).done); _iteratorNormalCompletion31 = true) {
+                    var _ref49 = _step31.value;
 
-                    var _ref56 = _slicedToArray(_ref55, 2);
+                    var _ref50 = _slicedToArray(_ref49, 2);
 
-                    var a = _ref56[0];
-                    var flows = _ref56[1];
-                    var _iteratorNormalCompletion35 = true;
-                    var _didIteratorError35 = false;
-                    var _iteratorError35 = undefined;
+                    var a = _ref50[0];
+                    var flows = _ref50[1];
+                    var _iteratorNormalCompletion32 = true;
+                    var _didIteratorError32 = false;
+                    var _iteratorError32 = undefined;
 
                     try {
-                        for (var _iterator35 = flows[Symbol.iterator](), _step35; !(_iteratorNormalCompletion35 = (_step35 = _iterator35.next()).done); _iteratorNormalCompletion35 = true) {
-                            var _ref57 = _step35.value;
+                        for (var _iterator32 = flows[Symbol.iterator](), _step32; !(_iteratorNormalCompletion32 = (_step32 = _iterator32.next()).done); _iteratorNormalCompletion32 = true) {
+                            var _ref51 = _step32.value;
 
-                            var _ref58 = _slicedToArray(_ref57, 2);
+                            var _ref52 = _slicedToArray(_ref51, 2);
 
-                            var b = _ref58[0];
-                            var w_a = _ref58[1];
+                            var b = _ref52[0];
+                            var w_a = _ref52[1];
 
                             if (!w_a || a == 's' || b == 's' || a == 't' || b == 't') {
                                 continue;
@@ -1690,9 +1473,9 @@ var OrthogonalDiagramEmbedding = function () {
 
                             var w_b = flow.get(b).get(a);
 
-                            var _ref59 = [this.faces[a], this.faces[b]],
-                                A = _ref59[0],
-                                B = _ref59[1];
+                            var _ref53 = [this.faces[a], this.faces[b]],
+                                A = _ref53[0],
+                                B = _ref53[1];
 
                             console.log(a, b, A, B);
 
@@ -1716,31 +1499,31 @@ var OrthogonalDiagramEmbedding = function () {
                             B.bend(e_b, turnsB);
                         }
                     } catch (err) {
-                        _didIteratorError35 = true;
-                        _iteratorError35 = err;
+                        _didIteratorError32 = true;
+                        _iteratorError32 = err;
                     } finally {
                         try {
-                            if (!_iteratorNormalCompletion35 && _iterator35.return) {
-                                _iterator35.return();
+                            if (!_iteratorNormalCompletion32 && _iterator32.return) {
+                                _iterator32.return();
                             }
                         } finally {
-                            if (_didIteratorError35) {
-                                throw _iteratorError35;
+                            if (_didIteratorError32) {
+                                throw _iteratorError32;
                             }
                         }
                     }
                 }
             } catch (err) {
-                _didIteratorError34 = true;
-                _iteratorError34 = err;
+                _didIteratorError31 = true;
+                _iteratorError31 = err;
             } finally {
                 try {
-                    if (!_iteratorNormalCompletion34 && _iterator34.return) {
-                        _iterator34.return();
+                    if (!_iteratorNormalCompletion31 && _iterator31.return) {
+                        _iterator31.return();
                     }
                 } finally {
-                    if (_didIteratorError34) {
-                        throw _iteratorError34;
+                    if (_didIteratorError31) {
+                        throw _iteratorError31;
                     }
                 }
             }
@@ -1775,13 +1558,13 @@ var ForceLinkDiagram = function () {
         //console.log(faces);
 
         this.adjMap = {};
-        var _iteratorNormalCompletion36 = true;
-        var _didIteratorError36 = false;
-        var _iteratorError36 = undefined;
+        var _iteratorNormalCompletion33 = true;
+        var _didIteratorError33 = false;
+        var _iteratorError33 = undefined;
 
         try {
-            for (var _iterator36 = edges[Symbol.iterator](), _step36; !(_iteratorNormalCompletion36 = (_step36 = _iterator36.next()).done); _iteratorNormalCompletion36 = true) {
-                var edge = _step36.value;
+            for (var _iterator33 = edges[Symbol.iterator](), _step33; !(_iteratorNormalCompletion33 = (_step33 = _iterator33.next()).done); _iteratorNormalCompletion33 = true) {
+                var edge = _step33.value;
 
                 var _edge = _slicedToArray(edge, 2),
                     a = _edge[0],
@@ -1800,16 +1583,16 @@ var ForceLinkDiagram = function () {
                 }
             }
         } catch (err) {
-            _didIteratorError36 = true;
-            _iteratorError36 = err;
+            _didIteratorError33 = true;
+            _iteratorError33 = err;
         } finally {
             try {
-                if (!_iteratorNormalCompletion36 && _iterator36.return) {
-                    _iterator36.return();
+                if (!_iteratorNormalCompletion33 && _iterator33.return) {
+                    _iterator33.return();
                 }
             } finally {
-                if (_didIteratorError36) {
-                    throw _iteratorError36;
+                if (_didIteratorError33) {
+                    throw _iteratorError33;
                 }
             }
         }
@@ -1872,7 +1655,7 @@ var ForceLinkDiagram = function () {
     }, {
         key: 'surroundingEdges',
         value: function surroundingEdges(ui) {
-            var _this4 = this;
+            var _this2 = this;
 
             // calculate the surrounding edges SUi
             var edges = [];
@@ -1883,41 +1666,41 @@ var ForceLinkDiagram = function () {
                         console.log(face);
                     }
 
-                    var _loop2 = function _loop2(_i5) {
-                        console.assert(_this4.edges.filter(function (e) {
-                            return e[0] == face[_i5] && e[1] == face[_i5 + 1] || e[1] == face[_i5] && e[0] == face[_i5 + 1];
+                    var _loop2 = function _loop2(_i3) {
+                        console.assert(_this2.edges.filter(function (e) {
+                            return e[0] == face[_i3] && e[1] == face[_i3 + 1] || e[1] == face[_i3] && e[0] == face[_i3 + 1];
                         }).length > 0);
-                        edges.push([face[_i5], face[_i5 + 1]]);
+                        edges.push([face[_i3], face[_i3 + 1]]);
                     };
 
-                    for (var _i5 = 0; _i5 < face.length - 1; _i5++) {
-                        _loop2(_i5);
+                    for (var _i3 = 0; _i3 < face.length - 1; _i3++) {
+                        _loop2(_i3);
                     }
                     edges.push([face[face.length - 1], face[0]]);
                 }
             };
 
-            var _iteratorNormalCompletion37 = true;
-            var _didIteratorError37 = false;
-            var _iteratorError37 = undefined;
+            var _iteratorNormalCompletion34 = true;
+            var _didIteratorError34 = false;
+            var _iteratorError34 = undefined;
 
             try {
-                for (var _iterator37 = this.faces[Symbol.iterator](), _step37; !(_iteratorNormalCompletion37 = (_step37 = _iterator37.next()).done); _iteratorNormalCompletion37 = true) {
-                    var face = _step37.value;
+                for (var _iterator34 = this.faces[Symbol.iterator](), _step34; !(_iteratorNormalCompletion34 = (_step34 = _iterator34.next()).done); _iteratorNormalCompletion34 = true) {
+                    var face = _step34.value;
 
                     _loop(face);
                 }
             } catch (err) {
-                _didIteratorError37 = true;
-                _iteratorError37 = err;
+                _didIteratorError34 = true;
+                _iteratorError34 = err;
             } finally {
                 try {
-                    if (!_iteratorNormalCompletion37 && _iterator37.return) {
-                        _iterator37.return();
+                    if (!_iteratorNormalCompletion34 && _iterator34.return) {
+                        _iterator34.return();
                     }
                 } finally {
-                    if (_didIteratorError37) {
-                        throw _iteratorError37;
+                    if (_didIteratorError34) {
+                        throw _iteratorError34;
                     }
                 }
             }
@@ -1928,8 +1711,8 @@ var ForceLinkDiagram = function () {
         key: 'calculateSurroundingEdges',
         value: function calculateSurroundingEdges() {
             this.surrEdges = [];
-            for (var _i6 = 0; _i6 < this.verts.length; _i6++) {
-                this.surrEdges[_i6] = this.surroundingEdges(_i6);
+            for (var _i4 = 0; _i4 < this.verts.length; _i4++) {
+                this.surrEdges[_i4] = this.surroundingEdges(_i4);
             }
         }
     }, {
@@ -1992,7 +1775,7 @@ var ForceLinkDiagram = function () {
             var FX = zeros(this.verts.length);
             var FY = zeros(this.verts.length);
             var M = [];
-            for (var _i7 = 0; _i7 < this.verts.length; _i7++) {
+            for (var _i5 = 0; _i5 < this.verts.length; _i5++) {
                 M.push([this.dbar, this.dbar, this.dbar, this.dbar, this.dbar, this.dbar, this.dbar, this.dbar]);
             }
 
@@ -2029,13 +1812,13 @@ var ForceLinkDiagram = function () {
                 }
 
                 // calculate edge attractive force
-                var _iteratorNormalCompletion38 = true;
-                var _didIteratorError38 = false;
-                var _iteratorError38 = undefined;
+                var _iteratorNormalCompletion35 = true;
+                var _didIteratorError35 = false;
+                var _iteratorError35 = undefined;
 
                 try {
-                    for (var _iterator38 = this.adjMap[ui][Symbol.iterator](), _step38; !(_iteratorNormalCompletion38 = (_step38 = _iterator38.next()).done); _iteratorNormalCompletion38 = true) {
-                        var _vi = _step38.value;
+                    for (var _iterator35 = this.adjMap[ui][Symbol.iterator](), _step35; !(_iteratorNormalCompletion35 = (_step35 = _iterator35.next()).done); _iteratorNormalCompletion35 = true) {
+                        var _vi = _step35.value;
 
                         var _F = this.forceAvert(this.verts[ui], this.verts[_vi]);
 
@@ -2045,27 +1828,27 @@ var ForceLinkDiagram = function () {
 
                     // calculate node-edge repulsive force
                 } catch (err) {
-                    _didIteratorError38 = true;
-                    _iteratorError38 = err;
+                    _didIteratorError35 = true;
+                    _iteratorError35 = err;
                 } finally {
                     try {
-                        if (!_iteratorNormalCompletion38 && _iterator38.return) {
-                            _iterator38.return();
+                        if (!_iteratorNormalCompletion35 && _iterator35.return) {
+                            _iterator35.return();
                         }
                     } finally {
-                        if (_didIteratorError38) {
-                            throw _iteratorError38;
+                        if (_didIteratorError35) {
+                            throw _iteratorError35;
                         }
                     }
                 }
 
-                var _iteratorNormalCompletion39 = true;
-                var _didIteratorError39 = false;
-                var _iteratorError39 = undefined;
+                var _iteratorNormalCompletion36 = true;
+                var _didIteratorError36 = false;
+                var _iteratorError36 = undefined;
 
                 try {
-                    for (var _iterator39 = this.surrEdges[ui][Symbol.iterator](), _step39; !(_iteratorNormalCompletion39 = (_step39 = _iterator39.next()).done); _iteratorNormalCompletion39 = true) {
-                        var edge = _step39.value;
+                    for (var _iterator36 = this.surrEdges[ui][Symbol.iterator](), _step36; !(_iteratorNormalCompletion36 = (_step36 = _iterator36.next()).done); _iteratorNormalCompletion36 = true) {
+                        var edge = _step36.value;
 
                         var _edge3 = _slicedToArray(edge, 2),
                             ai = _edge3[0],
@@ -2085,16 +1868,16 @@ var ForceLinkDiagram = function () {
                         }
                     }
                 } catch (err) {
-                    _didIteratorError39 = true;
-                    _iteratorError39 = err;
+                    _didIteratorError36 = true;
+                    _iteratorError36 = err;
                 } finally {
                     try {
-                        if (!_iteratorNormalCompletion39 && _iterator39.return) {
-                            _iterator39.return();
+                        if (!_iteratorNormalCompletion36 && _iterator36.return) {
+                            _iterator36.return();
                         }
                     } finally {
-                        if (_didIteratorError39) {
-                            throw _iteratorError39;
+                        if (_didIteratorError36) {
+                            throw _iteratorError36;
                         }
                     }
                 }
@@ -2102,13 +1885,13 @@ var ForceLinkDiagram = function () {
                 var MU = M[ui];
                 //console.log("Surr:", this.surrEdges);
 
-                var _iteratorNormalCompletion40 = true;
-                var _didIteratorError40 = false;
-                var _iteratorError40 = undefined;
+                var _iteratorNormalCompletion37 = true;
+                var _didIteratorError37 = false;
+                var _iteratorError37 = undefined;
 
                 try {
-                    for (var _iterator40 = this.surrEdges[ui][Symbol.iterator](), _step40; !(_iteratorNormalCompletion40 = (_step40 = _iterator40.next()).done); _iteratorNormalCompletion40 = true) {
-                        var _edge2 = _step40.value;
+                    for (var _iterator37 = this.surrEdges[ui][Symbol.iterator](), _step37; !(_iteratorNormalCompletion37 = (_step37 = _iterator37.next()).done); _iteratorNormalCompletion37 = true) {
+                        var _edge2 = _step37.value;
 
                         var _edge4 = _slicedToArray(_edge2, 2),
                             ai = _edge4[0],
@@ -2128,33 +1911,33 @@ var ForceLinkDiagram = function () {
                         if (this.veOnEdge(ve, this.verts[ai], this.verts[bi])) {
                             cv = sub(ve, this.verts[ui]);
 
-                            var _i8 = void 0;
+                            var _i6 = void 0;
                             if (cv[0] >= 0) {
                                 if (cv[1] >= 0) {
                                     if (cv[0] >= cv[1]) {
-                                        _i8 = 0;
+                                        _i6 = 0;
                                     } else {
-                                        _i8 = 1;
+                                        _i6 = 1;
                                     }
                                 } else {
                                     if (cv[0] >= -cv[1]) {
-                                        _i8 = 7;
+                                        _i6 = 7;
                                     } else {
-                                        _i8 = 6;
+                                        _i6 = 6;
                                     }
                                 }
                             } else {
                                 if (cv[1] >= 0) {
                                     if (-cv[0] >= cv[1]) {
-                                        _i8 = 3;
+                                        _i6 = 3;
                                     } else {
-                                        _i8 = 2;
+                                        _i6 = 2;
                                     }
                                 } else {
                                     if (-cv[0] >= -cv[1]) {
-                                        _i8 = 4;
+                                        _i6 = 4;
                                     } else {
-                                        _i8 = 5;
+                                        _i6 = 5;
                                     }
                                 }
                             }
@@ -2163,13 +1946,13 @@ var ForceLinkDiagram = function () {
                             //console.log("???", cv);
 
                             //console.log(MU, maxR, Math.cos(Math.atan2(cv[1], cv[0])));
-                            var ell = (_i8 + 4) % 8;
+                            var ell = (_i6 + 4) % 8;
                             for (var j = 0; j < MU.length; j++) {
-                                if ((_i8 - j + 8) % 8 == 0) {
+                                if ((_i6 - j + 8) % 8 == 0) {
                                     MU[j] = min(MU[j], maxR);
-                                } else if ((_i8 - j + 8) % 8 == 1 || (_i8 - j + 8) % 8 == 2) {
+                                } else if ((_i6 - j + 8) % 8 == 1 || (_i6 - j + 8) % 8 == 2) {
                                     MU[j] = min(MU[j], maxR / Math.cos(Math.atan2(cv[1], cv[0]) - (j + 1) * Math.PI / 4));
-                                } else if ((_i8 - j + 8) % 8 == 6 || (_i8 - j + 8) % 8 == 7) {
+                                } else if ((_i6 - j + 8) % 8 == 6 || (_i6 - j + 8) % 8 == 7) {
                                     MU[j] = min(MU[j], maxR / Math.cos(Math.atan2(cv[1], cv[0]) - j * Math.PI / 4));
                                 }
                             }
@@ -2202,33 +1985,33 @@ var ForceLinkDiagram = function () {
                                 cv = vb;
                             }
 
-                            var _i9 = void 0;
+                            var _i7 = void 0;
                             if (cv[0] >= 0) {
                                 if (cv[1] >= 0) {
                                     if (cv[0] >= cv[1]) {
-                                        _i9 = 0;
+                                        _i7 = 0;
                                     } else {
-                                        _i9 = 1;
+                                        _i7 = 1;
                                     }
                                 } else {
                                     if (cv[0] >= -cv[1]) {
-                                        _i9 = 7;
+                                        _i7 = 7;
                                     } else {
-                                        _i9 = 6;
+                                        _i7 = 6;
                                     }
                                 }
                             } else {
                                 if (cv[1] >= 0) {
                                     if (-cv[0] >= cv[1]) {
-                                        _i9 = 3;
+                                        _i7 = 3;
                                     } else {
-                                        _i9 = 2;
+                                        _i7 = 2;
                                     }
                                 } else {
                                     if (-cv[0] >= -cv[1]) {
-                                        _i9 = 4;
+                                        _i7 = 4;
                                     } else {
-                                        _i9 = 5;
+                                        _i7 = 5;
                                     }
                                 }
                             }
@@ -2237,13 +2020,13 @@ var ForceLinkDiagram = function () {
                             //console.log("???", cv);
 
                             //console.log(MU, maxR, Math.cos(Math.atan2(cv[1], cv[0])));
-                            var _ell = (_i9 + 4) % 8;
+                            var _ell = (_i7 + 4) % 8;
                             for (var _j3 = 0; _j3 < MU.length; _j3++) {
-                                if ((_i9 - _j3 + 8) % 8 == 0) {
+                                if ((_i7 - _j3 + 8) % 8 == 0) {
                                     MU[_j3] = min(MU[_j3], _maxR);
-                                } else if ((_i9 - _j3 + 8) % 8 == 1 || (_i9 - _j3 + 8) % 8 == 2) {
+                                } else if ((_i7 - _j3 + 8) % 8 == 1 || (_i7 - _j3 + 8) % 8 == 2) {
                                     MU[_j3] = min(MU[_j3], _maxR / Math.cos(Math.atan2(cv[1], cv[0]) - (_j3 + 1) * Math.PI / 4));
-                                } else if ((_i9 - _j3 + 8) % 8 == 6 || (_i9 - _j3 + 8) % 8 == 7) {
+                                } else if ((_i7 - _j3 + 8) % 8 == 6 || (_i7 - _j3 + 8) % 8 == 7) {
                                     MU[_j3] = min(MU[_j3], _maxR / Math.cos(Math.atan2(cv[1], cv[0]) - _j3 * Math.PI / 4));
                                 }
                             }
@@ -2274,16 +2057,16 @@ var ForceLinkDiagram = function () {
                     }
                     //if (ui == 0) console.log("MU0", MU, FX[ui], FY[ui]);
                 } catch (err) {
-                    _didIteratorError40 = true;
-                    _iteratorError40 = err;
+                    _didIteratorError37 = true;
+                    _iteratorError37 = err;
                 } finally {
                     try {
-                        if (!_iteratorNormalCompletion40 && _iterator40.return) {
-                            _iterator40.return();
+                        if (!_iteratorNormalCompletion37 && _iterator37.return) {
+                            _iterator37.return();
                         }
                     } finally {
-                        if (_didIteratorError40) {
-                            throw _iteratorError40;
+                        if (_didIteratorError37) {
+                            throw _iteratorError37;
                         }
                     }
                 }
@@ -2310,7 +2093,7 @@ function sleep(millis) {
 
 var workerFunctions = {
     setLinkDiagram: function setLinkDiagram(sigma, crossBend) {
-        self.shadow = new LinkShadow(sigma);
+        self.shadow = new _shadow2.default(sigma);
         self.orthshadow = new OrthogonalDiagramEmbedding(self.shadow);
 
         workerFunctions.embedDiagram();

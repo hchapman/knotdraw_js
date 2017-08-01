@@ -7,8 +7,10 @@
   },
   "devDependencies": {
     "babel-cli": "^6.0.0",
+    "babel-loader": "^7.1.1",
     "babel-preset-env": "^1.6.0",
     "quadtree-lib": "^1.0.7",
-    "snapsvg": "^0.5.1"
+    "snapsvg": "^0.5.1",
+    "webpack": "^3.4.1"
   }
 }

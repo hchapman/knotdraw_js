@@ -1,140 +1,13 @@
 importScripts('lalolib/lalolib.js');
 importScripts('lodash.min.js');
 
+import LinkShadow from "lib/shadow.js";
+
 function leastSquares(X /* : Matrix */, Y /* : Matrix */) /* : leastSquares */ {
     //console.log("X", X, inv(X), det(X), qr(X, true), Y);
     let betaHat = solve(mul(X, transpose(X)), mul(X, Y));
 
     return betaHat;
-}
-
-class LinkShadow {
-    constructor(verts) {
-        this.nv = verts.length;
-        this.ne = this.nv*2;
-        this.na = this.nv*4;
-
-        this.arcs = [];
-        this.edges = [];
-        this.verts = [];
-
-        // Edge i is canonically of the form [2i, 2i+1]
-        for (let ei = 0; ei < this.ne; ei++) {
-            //console.log(ei);
-            this.newArc(2*ei);
-            this.newArc(2*ei+1);
-            //console.log(this.arcs)
-
-            this.setEdge(ei, [2*ei, 2*ei+1]);
-        }
-
-        // Set verts by looking through verts
-        for (let vi in verts) {
-            this.setVert(vi, verts[vi]);
-        }
-
-        this.generateFaces();
-        this.generateComponents();
-    }
-
-    generateFaces() {
-        let leftArcs = new Set(this.arcs);
-        this.faces = [];
-
-        while(leftArcs.size > 0) {
-            let startArc = Array.from(leftArcs).pop();
-
-            let face = [];
-            let arc = startArc;
-            let _failsafe = 0;
-            do {
-                leftArcs.delete(arc);
-                face.push(arc);
-                arc.face = this.faces.length;
-                //console.log(arc);
-
-                let oArc = this.edges[arc.edge][(arc.edgepos+1)%2];
-                arc = this.verts[oArc.vert][(oArc.vertpos+1)%4];
-                //console.log(arc);
-                _failsafe += 1;
-                if (_failsafe > 500) {
-                    console.log("Failure");
-                    return this.faces;
-                }
-            } while (arc != startArc)
-
-            //face.reverse();
-            this.faces.push(face);
-        }
-        return this.faces;
-    }
-
-    generateComponents(oneOrient=true) {
-        let leftArcs = new Set(this.arcs);
-
-        this.components = [];
-        while (leftArcs.size > 0) {
-            let startArc = Array.from(leftArcs).pop();
-
-            let component = this.component(startArc);
-            for (let arc of component) {
-                leftArcs.delete(arc);
-                if (oneOrient) {
-                    // Delete the other arc edge-opposite this one
-                    leftArcs.delete(this.edges[arc.edge][(arc.edgepos+1)%2]);
-                }
-            }
-
-            this.components.push(component);
-        }
-        return this.components;
-    }
-
-    component(arc) {
-        let startArc = arc;
-
-        let component = [];
-        do {
-            component.push(arc);
-
-            let oArc = this.edges[arc.edge][(arc.edgepos+1)%2];
-            arc = this.verts[oArc.vert][(oArc.vertpos+2)%4];
-        } while (arc != startArc)
-
-        return component;
-    }
-
-    outVertI(arc) {
-        return arc.vert;
-    }
-
-    inVertI(arc) {
-        return this.edges[arc.edge][(arc.edgepos+1)%2].vert;
-    }
-
-    newArc(idx) {
-        this.arcs[idx] = {index: idx, edge:undefined, edgepos:undefined, vert:undefined, vertpos:undefined};
-    }
-
-    setEdge(idx, ais) {
-        this.edges[idx] = ais.map((ai) => {return this.arcs[ai];}, this);
-
-        for (let i in ais) {
-            this.arcs[ais[i]].edge = idx;
-            this.arcs[ais[i]].edgepos = parseInt(i);
-        }
-    }
-
-    setVert(idx, ais) {
-        this.verts[idx] = ais.map((ai) => {return this.arcs[ai];}, this);
-
-        for (let i in ais) {
-            //console.log(i)
-            //console.log(this.arcs)
-            this.arcs[ais[i]].vert = parseInt(idx);
-            this.arcs[ais[i]].vertpos = parseInt(i);
-        }
-    }
 }
 
 class OrthogonalFace {
@@ -163,7 +36,15 @@ class OrthogonalFace {
 
     bend(arc, turns) {
         let i = this.arcs.indexOf(arc);
+        turns.reverse();
 
+        for (let t of turns) {
+            let nArc = this.link.verts[arc.vert][(arc.vertpos-1)%2];
+            let oArc = this.link.edges[nArc.edge][(nArc.edgepos+1)%2];
+
+            this.arcs.splice(i, 0, oArc);
+            this.turns.splice(i, 0, t);
+        }
     }
 
 }
@@ -244,10 +125,7 @@ class DiGraph {
         return true;
     }
 
-    treePath(start, stop) {
-        // Requires that this is a tree to avoid real programming...
-
-        // this.edges is a map source -> sink
+    getReverseEdges() {
         let rev_edges = new Map();
         for (let [v, d] of this.nodes) {
             rev_edges.set(v, new Map());
@@ -260,6 +138,14 @@ class DiGraph {
                 rev_edges.get(v).set(u, {});
             }
         }
+        return rev_edges;
+    }
+
+    treePath(start, stop) {
+        // Requires that this is a tree to avoid real programming...
+
+        // this.edges is a map source -> sink
+        let rev_edges = this.getReverseEdges();
 
         let search_nodes = new Set();
         for (let u of this.nodes.keys()) {
@@ -301,15 +187,7 @@ class DiGraph {
         // CAVEAT: We only care about nodes so "meh" to edges
 
         // this.edges is a map source -> sink
-        let rev_edges = new Map();
-        for (let [v, d] of this.nodes) {
-            rev_edges.set(v, new Map());
-        }
-        for (let [u, sinks] of this.edges) {
-            for (let [v, d] of sinks) {
-                rev_edges.get(v).set(u, {});
-            }
-        }
+        let rev_edges = this.getReverseEdges();
 
         let search_nodes = new Set();
         for (let u of this.nodes.keys()) {
