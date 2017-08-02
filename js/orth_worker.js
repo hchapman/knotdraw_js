@@ -1112,8 +1112,9 @@ class DiGraph {
 
         let c = [];
         for (let [u, sinks] of H.edges) {
+            c[u] = [];
             for (let [v, d] of sinks) {
-                c[[u, v]] = _.get(d, 'weight', 0) + y[u] - y[v];
+                c[u][v] = _.get(d, 'weight', 0) + y[u] - y[v];
             }
         }
 
@@ -1124,7 +1125,7 @@ class DiGraph {
                 break;
             }
 
-            let cycleCost = Math.abs(c[newEdge]);
+            let cycleCost = Math.abs(c[newEdge[0]][newEdge[1]]);
 
             let path1 = T.treePath(r, newEdge[0]);
             let path2 = T.treePath(r, newEdge[1]);
@@ -1144,7 +1145,9 @@ class DiGraph {
             path2 = path2.slice(path2.indexOf(join));
             let cycle = [];
 
-            if (_.get(H.getEdge(...newEdge), "flow", 0) == 0) {
+            //if (_.get(H.getEdge(...newEdge), "flow", 0) == 0) {
+            let hEdgeD = H.getEdge(...newEdge);
+            if (hEdgeD.flow === 0 || hEdgeD.flow === undefined) {
                 reverse = false;
                 path2.reverse();
                 cycle = path1.concat(path2);
@@ -1164,17 +1167,44 @@ class DiGraph {
                         eps = -eps;
                     }
                     let [u, v] = newEdge;
-                    _.set(H.getEdge(u, v), "flow", _.get(H.getEdge(u, v), "flow", 0) + eps);
-                    _.set(H.getEdge(v, u), "flow", _.get(H.getEdge(v, u), "flow", 0) + eps);
+                    let uvEdge = H.getEdge(u, v);
+                    let vuEdge = H.getEdge(v, u);
+
+                    if (uvEdge.flow === undefined) {
+                        uvEdge.flow = eps;
+                    } else {
+                        uvEdge.flow += eps;
+                    }
+                    if (vuEdge.flow === undefined) {
+                        vuEdge.flow = eps;
+                    } else {
+                        vuEdge.flow += eps;
+                    }
+                    //_.set(H.getEdge(u, v), "flow", _.get(H.getEdge(u, v), "flow", 0) + eps);
+                    //_.set(H.getEdge(v, u), "flow", _.get(H.getEdge(v, u), "flow", 0) + eps);
                 } else {
                     for (let j = 0; j < cycle.length-1; j++) {
                         let u = cycle[j];
                         let v = cycle[j+1];
                         if ((u == newEdge[0] && v == newEdge[1]) ||
                             T.hasEdge(u, v)) {
-                            _.set(H.getEdge(u, v), "flow", _.get(H.getEdge(u, v), "flow", 0) + eps);
+                            //_.set(H.getEdge(u, v), "flow", _.get(H.getEdge(u, v), "flow", 0) + eps);
+                            let uvEdge = H.getEdge(u, v);
+
+                            if (uvEdge.flow === undefined) {
+                                uvEdge.flow = eps;
+                            } else {
+                                uvEdge.flow += eps;
+                            }
                         } else {
-                            _.set(H.getEdge(v, u), "flow", _.get(H.getEdge(v, u), "flow", 0) - eps);
+                            //_.set(H.getEdge(v, u), "flow", _.get(H.getEdge(v, u), "flow", 0) - eps);
+                            let vuEdge = H.getEdge(v, u);
+
+                            if (vuEdge.flow === undefined) {
+                                vuEdge.flow = eps;
+                            } else {
+                                vuEdge.flow += eps;
+                            }
                         }
                     }
                 }
@@ -1197,18 +1227,25 @@ class DiGraph {
 
                 if (R.nodes.has(newEdge[0])) {
                     for (let v of notR.nodes.keys()) {
-                        y[v] += c[newEdge];
+                        y[v] += c[newEdge[0]][newEdge[1]];
                     }
                 } else {
                     for (let v of notR.nodes.keys()) {
-                        y[v] -= c[newEdge];
+                        y[v] -= c[newEdge[0]][newEdge[1]];
                     }
                 }
 
                 for (let [u, sinks] of H.edges) {
                     for (let [v, d] of sinks) {
                         if (notR.nodes.has(u) || notR.nodes.has(v)) {
-                            c[[u, v]] = _.get(H.getEdge(u, v), "weight", 0) + y[u] - y[v];
+                            let uvEdge = H.getEdge(u, v);
+
+                            if (uvEdge.weight === undefined) {
+                                c[u][v] = y[u] - y[v];
+                            } else {
+                                c[u][v] = uvEdge.weight + y[u] - y[v];
+                            }
+                            //c[u][v] = _.get(H.getEdge(u, v), "weight", 0) + y[u] - y[v];
                         }
                     }
                 }
@@ -1345,15 +1382,18 @@ class DiGraph {
 
         for (let [u, sinks] of this.edges) {
             for (let [v, d] of sinks) {
-                if (_.get(d, 'flow', 0) == 0) {
-                    if (c[[u, v]] < 0) {
+                //if (_.get(d, 'flow', 0) == 0) {
+                if (d.flow === 0 || d.flow === undefined) {
+                    if (c[u][v] < 0) {
                         newEdge = [u, v];
                         return newEdge;
                     }
                 } else {
                     if ("capacity" in d &&
-                        _.get(d, 'flow', 0) == d.capacity &&
-                        c[[u, v]] > 0) {
+                        //_.get(d, 'flow', 0) == d.capacity &&
+                        ((d.flow === undefined && d.capacity === 0) ||
+                         d.flow === d.capacity) &&
+                        c[u][v] > 0) {
                         newEdge = [u, v];
                         return newEdge;
                     }
