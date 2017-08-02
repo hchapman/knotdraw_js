@@ -1,4 +1,4 @@
-export class LinkShadow {
+export default class LinkShadow {
     constructor(verts) {
         this.nv = verts.length;
         this.ne = this.nv*2;
@@ -25,6 +25,14 @@ export class LinkShadow {
 
         this.generateFaces();
         this.generateComponents();
+    }
+
+    copy() {
+        let link = new LinkShadow(this.verts.map(
+            v => v.map(a => a.index)
+        ));
+
+        return link;
     }
 
     generateFaces() {
@@ -99,7 +107,11 @@ export class LinkShadow {
     }
 
     inVertI(arc) {
-        return this.edges[arc.edge][(arc.edgepos+1)%2].vert;
+        return this.edgeOpposite(arc).vert;
+    }
+
+    edgeOpposite(arc) {
+        return this.edges[arc.edge][(arc.edgepos+1)%2];
     }
 
     newArc(idx) {
