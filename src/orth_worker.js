@@ -443,7 +443,9 @@ function sleep(millis)
 var workerFunctions = {
     setLinkDiagram: function(sigma, crossBend) {
         self.shadow = new LinkShadow(sigma);
-        self.orthshadow = new OrthogonalDiagramEmbedding(self.shadow);
+        self.orthShadow = new OrthogonalDiagramEmbedding(self.shadow);
+
+        self.orthShadow.orthogonalRep();
 
         workerFunctions.embedDiagram();
     },

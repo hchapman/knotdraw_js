@@ -49,13 +49,15 @@ export default class DiGraph {
         }
         this.edges.get(source).set(sink, {source: source, sink: sink});
 
-        if (attrs === undefined) {
-            return;
+        let edge = this.edges.get(source).get(sink);
+
+        if (attrs !== undefined) {
+            for (let [k, v] of Object.entries(attrs)) {
+                edge[k] = v;
+            }
         }
 
-        for (let [k, v] of Object.entries(attrs)) {
-            this.edges.get(source).get(sink)[k] = v;
-        }
+        return edge;
     }
 
     removeEdge(source, sink) {
@@ -78,6 +80,14 @@ export default class DiGraph {
         return true;
     }
 
+    *edgeGen() {
+        for (let [source, sinks] of this.edges) {
+            for (let [sink, d] of sinks) {
+                yield [source, sink, d];
+            }
+        }
+    }
+
     getReverseEdges() {
         let rev_edges = new Map();
         for (let [v, d] of this.nodes) {
@@ -96,6 +106,8 @@ export default class DiGraph {
 
     treePath(start, stop) {
         // Requires that this is a tree to avoid real programming...
+
+        if (start == stop) { return [start]; }
 
         // this.edges is a map source -> sink
         let rev_edges = this.getReverseEdges();
@@ -190,13 +202,13 @@ export default class DiGraph {
 
         while (stack.length > 0) {
             let current = stack.pop();
-            for (let v in this.edges.get(current).keys()) {
+            for (let v of this.edges.get(current).keys()) {
                 if (!seen.has(v)) {
                     stack.push(v);
                     seen.add(v);
                 }
             }
-            for (let v in rev_edges.get(current).keys()) {
+            for (let v of rev_edges.get(current).keys()) {
                 if (!seen.has(v)) {
                     stack.push(v);
                     seen.add(v);

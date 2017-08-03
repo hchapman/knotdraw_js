@@ -1,3 +1,17 @@
+class Arc {
+    constructor(index) {
+        this.index = index;
+    }
+
+    toString() {
+        return this.index.toString();
+    }
+
+    valueOf() {
+        return this.index;
+    }
+}
+
 export default class LinkShadow {
     constructor(verts) {
         this.nv = verts.length;
@@ -25,6 +39,7 @@ export default class LinkShadow {
 
         this.generateFaces();
         this.generateComponents();
+        this.connectArcs();
     }
 
     copy() {
@@ -113,9 +128,29 @@ export default class LinkShadow {
     edgeOpposite(arc) {
         return this.edges[arc.edge][(arc.edgepos+1)%2];
     }
+    vertNext(arc) {
+        return this.verts[arc.vert][(arc.vertpos+1)%4];
+    }
+    vertPrev(arc) {
+        return this.verts[arc.vert][(arc.vertpos+3)%4];
+    }
 
     newArc(idx) {
-        this.arcs[idx] = {index: idx, edge:undefined, edgepos:undefined, vert:undefined, vertpos:undefined};
+        if (idx === undefined) { idx = this.arcs.length; }
+
+        this.arcs[idx] = new Arc(idx);
+        // {index: idx, edge:undefined, edgepos:undefined, vert:undefined, vertpos:undefined};
+        return this.arcs[idx];
+    }
+
+    connectArcs() {
+        /* Hook up the arcs so they know, locally, their linkings */
+
+        for (let arc of this.arcs) {
+            arc.edgeOpposite = this.edgeOpposite(arc);
+            arc.vertNext = this.vertNext(arc);
+            arc.vertPrev = this.vertPrev(arc);
+        }
     }
 
     setEdge(idx, ais) {
@@ -131,8 +166,8 @@ export default class LinkShadow {
         this.verts[idx] = ais.map((ai) => {return this.arcs[ai];}, this);
 
         for (let i in ais) {
-            //console.log(i)
-            //console.log(this.arcs)
+            if (ais[i] === undefined) { continue; }
+
             this.arcs[ais[i]].vert = parseInt(idx);
             this.arcs[ais[i]].vertpos = parseInt(i);
         }
