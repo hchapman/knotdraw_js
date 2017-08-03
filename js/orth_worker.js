@@ -60,941 +60,11 @@
 /******/ 	__webpack_require__.p = "";
 /******/
 /******/ 	// Load entry module and return exports
-/******/ 	return __webpack_require__(__webpack_require__.s = 1);
+/******/ 	return __webpack_require__(__webpack_require__.s = 2);
 /******/ })
 /************************************************************************/
 /******/ ([
-/* 0 */,
-/* 1 */
-/***/ (function(module, __webpack_exports__, __webpack_require__) {
-
-"use strict";
-Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_0__lib_shadow_js__ = __webpack_require__(2);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__lib_orthemb_js__ = __webpack_require__(3);
-importScripts('lalolib/lalolib.js');
-importScripts('lodash.min.js');
-
-
-
-
-function leastSquares(X /* : Matrix */, Y /* : Matrix */) /* : leastSquares */ {
-    //console.log("X", X, inv(X), det(X), qr(X, true), Y);
-    let betaHat = solve(mul(X, transpose(X)), mul(X, Y));
-
-    return betaHat;
-}
-
-class ForceLinkDiagram {
-    /* Link diagram embedding improved by ImPrEd */
-    constructor (verts, edges, faces) {
-        this.verts = verts;
-        this.edges = edges;
-        this.faces = faces;
-
-        //console.log("+++++++");
-        //console.log(verts);
-        //console.log(edges);
-        //console.log(faces);
-
-        this.adjMap = {};
-        for (let edge of edges) {
-            let [a, b] = edge;
-            if (a in this.adjMap) {
-                this.adjMap[a].push(b);
-            } else {
-                this.adjMap[a] = [b];
-            }
-
-            if (b in this.adjMap) {
-                this.adjMap[b].push(a);
-            } else {
-                this.adjMap[b] = [a];
-            }
-        }
-
-        this.delta = 2;
-        this.gamma = 5;
-
-        this.dbar = 3*this.delta;
-
-        this.aExp = 1;
-        this.erExp = 2;
-
-        this.calculateSurroundingEdges();
-    }
-
-    distance(u, v) {
-        return norm(sub(u, v));
-    }
-
-    forceAvert(u, v) {
-        //console.log(this.distance(u,v));
-        return mul(Math.pow(this.distance(u, v)/this.delta, this.aExp),
-                   sub(v, u));
-    }
-
-    forceRvert(u, v) {
-        let d = this.distance(u, v);
-        return mul(Math.pow(this.delta/d, this.erExp),
-                   sub(u, v));
-    }
-
-    computeVe(v, a, b) {
-        let m = (a[1] - b[1])/(a[0] - b[0]);
-        let n = -1 / m;
-        let c = a[1] - m*a[0];
-        let d = v[1] - n*v[0];
-
-        let x = (d - c) / (m - n);
-        return [x, m*x + c];
-    }
-
-    veOnEdge(ve, a, b) {
-        return (((ve[0] <= a[0] && ve[0] >= b[0]) ||
-                 (ve[0] <= b[0] && ve[0] >= a[0])) &&
-                ((ve[1] <= a[1] && ve[1] >= b[1]) ||
-                 (ve[1] <= b[1] && ve[1] >= a[1])));
-    }
-
-    forceRedge(u, a, b, ve) {
-        let d = this.distance(u, ve);
-        if (d >= this.gamma) {
-            // node and "virtual edge" too far
-            return [0, 0];
-        }
-
-        return mul(-Math.pow(this.gamma - d, this.erExp)/d,
-                   sub(ve, u));
-    }
-
-    surroundingEdges(ui) {
-        // calculate the surrounding edges SUi
-        let edges = [];
-        for (let face of this.faces) {
-            if (face.includes(ui)) {
-                if (ui == 63) {
-                    console.log(face);
-                }
-                for (let i = 0; i < face.length-1; i++) {
-                    console.assert(this.edges.filter(
-                        e => ((e[0] == face[i] && e[1] == face[i+1]) ||
-                              (e[1] == face[i] && e[0] == face[i+1]))).length > 0);
-                    edges.push([face[i], face[i+1]]);
-                }
-                edges.push([face[face.length-1], face[0]]);
-            }
-        }
-        return edges;
-    }
-
-    calculateSurroundingEdges() {
-        this.surrEdges = [];
-        for (let i = 0; i < this.verts.length; i++) {
-            this.surrEdges[i] = this.surroundingEdges(i);
-        }
-    }
-
-    move (ui, FUx, FUy, MU) {
-        let i;
-        if (FUx >= 0) {
-            if (FUy >= 0) {
-                if (FUx >= FUy) {
-                    i = 0;
-                } else {
-                    i = 1;
-                }
-            } else {
-                if (FUx >= -FUy) {
-                    i = 7;
-                } else {
-                    i = 6;
-                }
-            }
-        } else {
-            if (FUy >= 0) {
-                if (-FUx >= FUy) {
-                    i = 3;
-                } else {
-                    i = 2;
-                }
-            } else {
-                if (-FUx >= -FUy) {
-                    i = 4;
-                } else {
-                    i = 5;
-                }
-            }
-        }
-
-        let FU = [FUx, FUy];
-
-        let fU = norm(FU);
-        let du;
-        if (fU <= MU[i]) {
-            du = FU;
-        } else {
-            du = mul(MU[i]/fU, FU);
-        }
-
-        //if (ui == 9) {
-        //    console.log(ui, i, du, FU, MU[i]);
-        //}
-
-        //console.log(this.verts[ui], du, FU, MU);
-        this.verts[ui][0] += du[0];
-        this.verts[ui][1] += du[1];
-        //console.log(FU, MU[i], du, this.verts[ui]);
-    }
-
-    update() {
-        //console.log(this.adjMap);
-        let FX = zeros(this.verts.length);
-        let FY = zeros(this.verts.length);
-        let M = [];
-        for (let i = 0; i < this.verts.length; i++) {
-            M.push([this.dbar, this.dbar, this.dbar, this.dbar,
-                    this.dbar, this.dbar, this.dbar, this.dbar]);
-        }
-
-        let barycenter = mul(1/this.verts.length, sum(this.verts, 2));
-
-        for (let ui = 0; ui < this.verts.length; ui++) {
-            // Calculate gravity force
-            let db = sub(barycenter, this.verts[ui]);
-            let nDb = norm(db);
-            FX[ui] += db[0]/nDb;
-            FY[ui] += db[1]/nDb;
-
-            // Calculate total node-node repulsive force
-            for (let vi = 0; vi < this.verts.length; vi++) {
-                if (ui != vi) {
-                    if (this.distance(ui, vi) >= 3*this.delta) {
-                        continue;
-                    }
-
-                    if (this.adjMap[ui].length == 2) {
-                        if (this.adjMap[ui].includes(vi)) {
-                            continue;
-                        }
-                    }
-
-                    let F = this.forceRvert(this.verts[ui], this.verts[vi]);
-                    //console.log("Fnnr", F);
-                    //console.log(ui, vi, this.verts[ui], this.verts[vi], "Fnnr", F);
-                    if (!isNaN(F[0])) {
-                        FX[ui] += F[0];
-                        FY[ui] += F[1];
-                    }
-                }
-            }
-
-            // calculate edge attractive force
-            for (let vi of this.adjMap[ui]) {
-                let F = this.forceAvert(this.verts[ui], this.verts[vi]);
-
-                FX[ui] += F[0];
-                FY[ui] += F[1];
-            }
-
-            // calculate node-edge repulsive force
-            for (let edge of this.surrEdges[ui]) {
-                let [ai, bi] = edge;
-                if (ui == ai || ui == bi) {
-                    continue;
-                }
-                let ve = this.computeVe(
-                    this.verts[ui], this.verts[ai], this.verts[bi]);
-
-                if (this.veOnEdge(ve, this.verts[ai], this.verts[bi])) {
-                    let F = this.forceRedge(
-                        this.verts[ui], this.verts[ai], this.verts[bi], ve);
-                    if (!isNaN(F[0])) {
-                        FX[ui] += F[0];
-                        FY[ui] += F[1];
-                    }
-                }
-            }
-
-            let MU = M[ui];
-            //console.log("Surr:", this.surrEdges);
-
-            for (let edge of this.surrEdges[ui]) {
-                let [ai, bi] = edge;
-                if (ui == ai || ui == bi) {
-                    continue;
-                }
-                let ve = this.computeVe(
-                    this.verts[ui], this.verts[ai], this.verts[bi]);
-
-                let cv;
-
-                if (ui == 0 && ai == 5 && bi == 2) {
-                    //console.log(this.verts[ai], this.verts[bi], ve);
-                }
-                //console.log("v-e", ui, ai, bi);
-                if (this.veOnEdge(ve, this.verts[ai], this.verts[bi])) {
-                    cv = sub(ve, this.verts[ui]);
-
-                    let i;
-                    if (cv[0] >= 0) {
-                        if (cv[1] >= 0) {
-                            if (cv[0] >= cv[1]) {
-                                i = 0;
-                            } else {
-                                i = 1;
-                            }
-                        } else {
-                            if (cv[0] >= -cv[1]) {
-                                i = 7;
-                            } else {
-                                i = 6;
-                            }
-                        }
-                    } else {
-                        if (cv[1] >= 0) {
-                            if (-cv[0] >= cv[1]) {
-                                i = 3;
-                            } else {
-                                i = 2;
-                            }
-                        } else {
-                            if (-cv[0] >= -cv[1]) {
-                                i = 4;
-                            } else {
-                                i = 5;
-                            }
-                        }
-                    }
-
-                    let maxR = norm(cv)/2.1;
-                    //console.log("???", cv);
-
-                    //console.log(MU, maxR, Math.cos(Math.atan2(cv[1], cv[0])));
-                    let ell = (i+4)%8;
-                    for (let j = 0; j < MU.length; j++) {
-                        if ((i-j+8)%8 == 0) {
-                            MU[j] = min(MU[j], maxR);
-                        } else if ((i-j+8)%8 == 1 || (i-j+8)%8 == 2) {
-                            MU[j] = min(MU[j], maxR /
-                                         Math.cos(Math.atan2(cv[1], cv[0]) - (j+1)*Math.PI/4));
-                        } else if ((i-j+8)%8 == 6 || (i-j+8)%8 == 7) {
-                            MU[j] = min(MU[j], maxR /
-                                         Math.cos(Math.atan2(cv[1], cv[0]) - (j)*Math.PI/4));
-                        }
-                    }
-
-                    for (let j = 0; j < MU.length; j++) {
-                        if ((ell-j+8)%8 == 0) {
-                            M[ai][j] = min(M[ai][j], maxR);
-                        } else if ((ell-j+8)%8 == 1 || (ell-j+8)%8 == 2) {
-                            M[ai][j] = min(M[ai][j], maxR /
-                                           Math.cos(Math.atan2(-cv[1], -cv[0]) - (j+1)*Math.PI/4));
-                        } else if ((ell-j+8)%8 == 6 || (ell-j+8)%8 == 7) {
-                            M[ai][j] = min(M[ai][j], maxR /
-                                           Math.cos(Math.atan2(-cv[1], -cv[0]) - (j)*Math.PI/4));
-                        }
-                    }
-
-                    for (let j = 0; j < MU.length; j++) {
-                        if ((ell-j+8)%8 == 0) {
-                            M[bi][j] = min(M[bi][j], maxR);
-                        } else if ((ell-j+8)%8 == 1 || (ell-j+8)%8 == 2) {
-                            M[bi][j] = min(M[bi][j], maxR /
-                                           Math.cos(Math.atan2(-cv[1], -cv[0]) - (j+1)*Math.PI/4));
-                        } else if ((ell-j+8)%8 == 6 || (ell-j+8)%8 == 7) {
-                            M[bi][j] = min(M[bi][j], maxR /
-                                           Math.cos(Math.atan2(-cv[1], -cv[0]) - (j)*Math.PI/4));
-                        }
-                    }
-
-                } else {
-                    let va = sub(this.verts[ai], this.verts[ui]);
-                    let vb = sub(this.verts[bi], this.verts[ui]);
-                    if (norm(va) < norm(vb)) {
-                        cv = va;
-                    } else {
-                        cv = vb;
-                    }
-
-                    let i;
-                    if (cv[0] >= 0) {
-                        if (cv[1] >= 0) {
-                            if (cv[0] >= cv[1]) {
-                                i = 0;
-                            } else {
-                                i = 1;
-                            }
-                        } else {
-                            if (cv[0] >= -cv[1]) {
-                                i = 7;
-                            } else {
-                                i = 6;
-                            }
-                        }
-                    } else {
-                        if (cv[1] >= 0) {
-                            if (-cv[0] >= cv[1]) {
-                                i = 3;
-                            } else {
-                                i = 2;
-                            }
-                        } else {
-                            if (-cv[0] >= -cv[1]) {
-                                i = 4;
-                            } else {
-                                i = 5;
-                            }
-                        }
-                    }
-
-                    let maxR = norm(cv)/2.1;
-                    //console.log("???", cv);
-
-                    //console.log(MU, maxR, Math.cos(Math.atan2(cv[1], cv[0])));
-                    let ell = (i+4)%8;
-                    for (let j = 0; j < MU.length; j++) {
-                        if ((i-j+8)%8 == 0) {
-                            MU[j] = min(MU[j], maxR);
-                        } else if ((i-j+8)%8 == 1 || (i-j+8)%8 == 2) {
-                            MU[j] = min(MU[j], maxR /
-                                         Math.cos(Math.atan2(cv[1], cv[0]) - (j+1)*Math.PI/4));
-                        } else if ((i-j+8)%8 == 6 || (i-j+8)%8 == 7) {
-                            MU[j] = min(MU[j], maxR /
-                                         Math.cos(Math.atan2(cv[1], cv[0]) - (j)*Math.PI/4));
-                        }
-                    }
-
-                    let m = cv[1]/cv[0]; // Slope of cv
-                    let n = -1 / m; // Slope of l
-
-                    for (let j = 0; j < MU.length; j++) {
-                        if ((ell-j+8)%8 == 0) {
-                            M[ai][j] = min(M[ai][j], maxR);
-                        } else if ((ell-j+8)%8 == 1 || (ell-j+8)%8 == 2) {
-                            M[ai][j] = min(M[ai][j], maxR /
-                                           Math.cos(Math.atan2(-cv[1], -cv[0]) - (j+1)*Math.PI/4));
-                        } else if ((ell-j+8)%8 == 6 || (ell-j+8)%8 == 7) {
-                            M[ai][j] = min(M[ai][j], maxR /
-                                           Math.cos(Math.atan2(-cv[1], -cv[0]) - (j)*Math.PI/4));
-                        }
-                    }
-
-                    for (let j = 0; j < MU.length; j++) {
-                        if ((ell-j+8)%8 == 0) {
-                            M[bi][j] = min(M[bi][j], maxR);
-                        } else if ((ell-j+8)%8 == 1 || (ell-j+8)%8 == 2) {
-                            M[bi][j] = min(M[bi][j], maxR /
-                                           Math.cos(Math.atan2(-cv[1], -cv[0]) - (j+1)*Math.PI/4));
-                        } else if ((ell-j+8)%8 == 6 || (ell-j+8)%8 == 7) {
-                            M[bi][j] = min(M[bi][j], maxR /
-                                           Math.cos(Math.atan2(-cv[1], -cv[0]) - (j)*Math.PI/4));
-                        }
-                    }
-                }
-
-            }
-            //if (ui == 0) console.log("MU0", MU, FX[ui], FY[ui]);
-        }
-
-        //console.log("Fx", FX);
-        for (let ui in this.verts) {
-
-            this.move(ui, FX[ui], FY[ui], M[ui]);
-        }
-    }
-}
-
-function sleep(millis)
-{
-    var date = new Date();
-    var curDate = null;
-    do { curDate = new Date(); }
-    while(curDate-date < millis);
-}
-
-
-var workerFunctions = {
-    setLinkDiagram: function(sigma, crossBend) {
-        self.shadow = new __WEBPACK_IMPORTED_MODULE_0__lib_shadow_js__["a" /* default */](sigma);
-        self.orthShadow = new __WEBPACK_IMPORTED_MODULE_1__lib_orthemb_js__["a" /* default */](self.shadow);
-
-        self.orthShadow.orthogonalRep();
-
-        workerFunctions.embedDiagram();
-    },
-
-    embedDiagram: function() {
-        let tstart = Date.now();
-
-        let thresh = 5e-10;
-    }
-}
-
-onmessage = function(e) {
-    workerFunctions[e.data.function](...e.data.arguments);
-}
-
-
-/***/ }),
-/* 2 */
-/***/ (function(module, __webpack_exports__, __webpack_require__) {
-
-"use strict";
-class Arc {
-    constructor(index) {
-        this.index = index;
-    }
-
-    toString() {
-        return this.index.toString();
-    }
-
-    valueOf() {
-        return this.index;
-    }
-}
-
-class LinkShadow {
-    constructor(verts) {
-        this.nv = verts.length;
-        this.ne = this.nv*2;
-        this.na = this.nv*4;
-
-        this.arcs = [];
-        this.edges = [];
-        this.verts = [];
-
-        // Edge i is canonically of the form [2i, 2i+1]
-        for (let ei = 0; ei < this.ne; ei++) {
-            //console.log(ei);
-            this.newArc(2*ei);
-            this.newArc(2*ei+1);
-            //console.log(this.arcs)
-
-            this.setEdge(ei, [2*ei, 2*ei+1]);
-        }
-
-        // Set verts by looking through verts
-        for (let vi in verts) {
-            this.setVert(vi, verts[vi]);
-        }
-
-        this.generateFaces();
-        this.generateComponents();
-        this.connectArcs();
-    }
-
-    copy() {
-        let link = new LinkShadow(this.verts.map(
-            v => v.map(a => a.index)
-        ));
-
-        return link;
-    }
-
-    generateFaces() {
-        let leftArcs = new Set(this.arcs);
-        this.faces = [];
-
-        while(leftArcs.size > 0) {
-            let startArc = Array.from(leftArcs).pop();
-
-            let face = [];
-            let arc = startArc;
-            let _failsafe = 0;
-            do {
-                leftArcs.delete(arc);
-                face.push(arc);
-                arc.face = this.faces.length;
-                //console.log(arc);
-
-                let oArc = this.edges[arc.edge][(arc.edgepos+1)%2];
-                arc = this.verts[oArc.vert][(oArc.vertpos+1)%4];
-                //console.log(arc);
-                _failsafe += 1;
-                if (_failsafe > 500) {
-                    console.log("Failure");
-                    return this.faces;
-                }
-            } while (arc != startArc)
-
-            //face.reverse();
-            this.faces.push(face);
-        }
-        return this.faces;
-    }
-
-    generateComponents(oneOrient=true) {
-        let leftArcs = new Set(this.arcs);
-
-        this.components = [];
-        while (leftArcs.size > 0) {
-            let startArc = Array.from(leftArcs).pop();
-
-            let component = this.component(startArc);
-            for (let arc of component) {
-                leftArcs.delete(arc);
-                if (oneOrient) {
-                    // Delete the other arc edge-opposite this one
-                    leftArcs.delete(this.edges[arc.edge][(arc.edgepos+1)%2]);
-                }
-            }
-
-            this.components.push(component);
-        }
-        return this.components;
-    }
-
-    component(arc) {
-        let startArc = arc;
-
-        let component = [];
-        do {
-            component.push(arc);
-
-            let oArc = this.edges[arc.edge][(arc.edgepos+1)%2];
-            arc = this.verts[oArc.vert][(oArc.vertpos+2)%4];
-        } while (arc != startArc)
-
-        return component;
-    }
-
-    outVertI(arc) {
-        return arc.vert;
-    }
-
-    inVertI(arc) {
-        return this.edgeOpposite(arc).vert;
-    }
-
-    edgeOpposite(arc) {
-        return this.edges[arc.edge][(arc.edgepos+1)%2];
-    }
-    vertNext(arc) {
-        return this.verts[arc.vert][(arc.vertpos+1)%4];
-    }
-    vertPrev(arc) {
-        return this.verts[arc.vert][(arc.vertpos+3)%4];
-    }
-
-    newArc(idx) {
-        if (idx === undefined) { idx = this.arcs.length; }
-
-        this.arcs[idx] = new Arc(idx);
-        // {index: idx, edge:undefined, edgepos:undefined, vert:undefined, vertpos:undefined};
-        return this.arcs[idx];
-    }
-
-    connectArcs() {
-        /* Hook up the arcs so they know, locally, their linkings */
-
-        for (let arc of this.arcs) {
-            arc.edgeOpposite = this.edgeOpposite(arc);
-            arc.vertNext = this.vertNext(arc);
-            arc.vertPrev = this.vertPrev(arc);
-        }
-    }
-
-    setEdge(idx, ais) {
-        this.edges[idx] = ais.map((ai) => {return this.arcs[ai];}, this);
-
-        for (let i in ais) {
-            this.arcs[ais[i]].edge = idx;
-            this.arcs[ais[i]].edgepos = parseInt(i);
-        }
-    }
-
-    setVert(idx, ais) {
-        this.verts[idx] = ais.map((ai) => {return this.arcs[ai];}, this);
-
-        for (let i in ais) {
-            if (ais[i] === undefined) { continue; }
-
-            this.arcs[ais[i]].vert = parseInt(idx);
-            this.arcs[ais[i]].vertpos = parseInt(i);
-        }
-    }
-}
-/* harmony export (immutable) */ __webpack_exports__["a"] = LinkShadow;
-
-
-
-/***/ }),
-/* 3 */
-/***/ (function(module, __webpack_exports__, __webpack_require__) {
-
-"use strict";
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_0__digraph_js__ = __webpack_require__(4);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__orthrep_js__ = __webpack_require__(5);
-
-
-
-class Face {
-    constructor (link, arcs, exterior=false) {
-        this.link = link;
-        this.arcs = arcs;
-        this.exterior = exterior;
-
-        // this.edges is array of [arc1index, arc2index] around the face
-        // this.edges = this.arcs.map(a => this.link.edges[a.edge].map(b => b.index));
-        this.edges = this.arcs.map(a => a.edge);
-        this.edgeMap = []; for (let arc of this.arcs) { this.edgeMap[arc.edge] = arc; }
-
-        this.turns = this.arcs.map(a => 1);
-    }
-
-    edgeOfIntersection(other) {
-        let commonEdges = this.edges.filter(e => other.edges.some(oe => e == oe));
-        if (commonEdges.length > 0) {
-            let e = commonEdges.pop();
-            return [this.edgeMap[e], other.edgeMap[e]];
-        }
-        return null;
-    }
-
-    sourceCapacity() {
-        return (this.exterior ? 0 :
-                Math.max(4 - this.arcs.length, 0));
-    }
-
-    sinkCapacity() {
-        return (this.exterior ? this.arcs.length + 4 :
-                Math.max(this.arcs.length - 4, 0));
-    }
-
-    bend(arc, turns) {
-        let i = this.arcs.indexOf(arc);
-        //turns.reverse();
-
-        for (let t of turns) {
-            arc = arc.edgeOpposite.vertNext;
-            //arc = arc.vertPrev.edgeOpposite;
-            this.arcs.splice(i+1, 0, arc);
-            this.turns.splice(i+1, 0, t);
-            i += 1;
-        }
-    }
-
-    *iterateFrom(arc) {
-        let ai = this.arcs.indexOf(arc);
-        for (let i = ai+1; i < this.arcs.length; i++) {
-            yield [this.arcs[i], this.turns[i]];
-        }
-        for (let i = 0; i < ai+1; i++) {
-            yield [this.arcs[i], this.turns[i]];
-        }
-    }
-
-    orientEdges(arc, orientation) {
-        const dirs = ["left", "up", "right", "down"];
-        console.assert(this.isValid(), this);
-        let dir = dirs.indexOf(orientation);
-        let ans = new Map();
-        for (let [a, t] of this.iterateFrom(arc)) {
-            dir = (dir+t+4)%4;
-            ans.set(a.index, dirs[dir]);
-            ans.set(a.edgeOpposite.index, dirs[(dir+2)%4]);
-        }
-        return ans;
-    }
-
-    isValid() {
-        let face = [];
-        let start = this.arcs[0];
-        let arc = start;
-        while (!face.includes(arc.index)) {
-            face.push(arc.index);
-            arc = arc.edgeOpposite.vertNext;
-        }
-
-        return this.arcs.reduce((val, a, i) => val && (a.index == face[i]), true);
-    }
-
-}
-
-class OrthogonalDiagramEmbedding {
-    constructor (shadow) {
-        this.shadow = shadow.copy();
-
-        this.faces = this.shadow.faces.map(f => new Face(this.shadow, f));
-        let F = this.faces.reduce(
-            (bigF, f) => (bigF.arcs.length >= f.arcs.length) ? bigF : f);
-        F.exterior = true;
-
-        this.faceNetwork = this.flowNetwork();
-        this.bend();
-        this.orientEdges();
-
-        this.edges = this.faces.reduce((all, f) => all.concat(f.arcs), []);
-        this.repairComponents();
-    }
-
-    flowNetwork() {
-        let G = new __WEBPACK_IMPORTED_MODULE_0__digraph_js__["a" /* default */]();
-
-        let sourceDemand = this.faces.reduce(
-            (tot, f) => (tot + f.sourceCapacity()), 0);
-        G.addNode('s', {demand: -sourceDemand});
-        for (let fi = 0; fi < this.faces.length; fi++) {
-            let sourceCapacity = this.faces[fi].sourceCapacity();
-            if (sourceCapacity > 0) {
-                G.addEdge('s', fi, {weight: 0, capacity: sourceCapacity});
-            }
-        }
-
-        let sinkDemand = this.faces.reduce(
-            (tot, f) => (tot + f.sinkCapacity()), 0);
-        G.addNode('t', {demand: sinkDemand});
-        for (let fi = 0; fi < this.faces.length; fi++) {
-            let sinkCapacity = this.faces[fi].sinkCapacity();
-            if (sinkCapacity > 0) {
-                G.addEdge(fi, 't', {weight: 0, capacity: sinkCapacity});
-            }
-        }
-
-        for (let ai = 0; ai < this.faces.length; ai++) {
-            for (let bi = 0; bi < this.faces.length; bi++) {
-                if (ai != bi &&
-                    this.faces[ai].edgeOfIntersection(this.faces[bi]) != null) {
-                    G.addEdge(ai, bi, {weight: 1});
-                }
-            }
-        }
-
-        console.log(G);
-        return G;
-    }
-
-    bend() {
-        let flow = this.faceNetwork.minCostFlow()[1];
-        console.log(flow);
-
-        for (let [a, flows] of flow) {
-            for (let [b, w_a] of flows) {
-                //console.log(a, b, w_a);
-                if (!w_a || a == 's' || b == 's' || a == 't' || b == 't') {
-                    continue;
-                }
-
-                let w_b = flow.get(b).get(a);
-
-                let [A, B] = [this.faces[a], this.faces[b]];
-                console.log(a, b, A, B);
-                let [arc_ai, arc_bi] = A.edgeOfIntersection(B);
-
-                let arc_a = this.shadow.arcs[arc_ai];
-                let arc_b = this.shadow.arcs[arc_bi];
-
-                let turnsA = (new Array(w_a).fill(1)).concat(
-                    (new Array(w_b).fill(-1)));
-                let turnsB = (new Array(w_b).fill(1)).concat(
-                    (new Array(w_a).fill(-1)));
-
-                this.subdivideEdge(arc_a, turnsA.length);
-
-                A.bend(arc_a, turnsA);
-                B.bend(arc_b, turnsB);
-            }
-        }
-    }
-
-    subdivideEdge(arc, n) {
-        let head = arc;
-        let tail;
-        let backwards = !this.shadow.components.some(c => c.includes(arc));
-        if (backwards) {
-            tail = head;
-            head = tail.edgeOpposite;
-        } else {
-            tail = head.edgeOpposite;
-        }
-
-        let strands = (new Array(2*n).fill(0)).map(i => this.shadow.newArc());
-        strands.splice(0, 0, head);
-        strands.push(tail);
-
-        // Glue edges
-        for (let si = 0; si < strands.length; si += 2) {
-            strands[si].edgeOpposite = strands[si+1];
-            strands[si+1].edgeOpposite = strands[si];
-
-            this.shadow.setEdge(this.shadow.edges.length,
-                                [strands[si].index, strands[si+1].index]);
-        }
-
-        // Glue degree 2 joints
-        for (let si = 1; si < strands.length-1; si += 2) {
-            strands[si].vertNext = strands[si+1];
-            strands[si].vertPrev = strands[si+1];
-
-            strands[si+1].vertNext = strands[si];
-            strands[si+1].vertPrev = strands[si];
-
-            this.shadow.setVert(this.shadow.verts.length,
-                                [strands[si].index, undefined, strands[si+1].index, undefined]);
-        }
-    }
-
-    repairComponents() {
-        this.arcComponentMap = new Map();
-        this.orderedArcs = [];
-
-        for (let i = 0; i < this.shadow.components.length; i++) {
-            for (let arc of this.shadow.components[i]) {
-                this.arcComponentMap.set(arc.index, i);
-                this.orderedArcs.push(arc);
-            }
-        }
-    }
-
-    orientEdges() {
-        let orientations = [];
-        orientations[this.faces[0].arcs[0].index] = 'right';
-
-        let G = this.faceNetwork.copy();
-        G.removeNode('s');
-        G.removeNode('t');
-
-        for (let node of G.depthFirstSearch(0)) {
-            let F = this.faces[node];
-            for (let arc of F.arcs) {
-                if (arc.index in orientations) {
-                    let newOrientations = F.orientEdges(
-                        arc, orientations[arc.index]);
-                    for (let [a, dir] of newOrientations) {
-                        if (a in orientations) {
-                            console.assert(orientations[a] == dir, orientations, a, dir);
-                        } else {
-                            orientations[a] = dir;
-                        }
-                    }
-                    break;
-                }
-            }
-        }
-
-        //console.assert(orientations.length, orientations);
-        this.orientations = orientations;
-    }
-
-    orthogonalSpec() {
-        return ['right', 'up'].map(
-            dir => this.edges.filter(a => this.orientations[a.index] == dir).map(
-                a => [a.vert, a.edgeOpposite.vert] // TODO
-            ));
-    }
-
-    orthogonalRep() {
-        console.log(this.orthogonalSpec());
-    }
-}
-/* harmony export (immutable) */ __webpack_exports__["a"] = OrthogonalDiagramEmbedding;
-
-
-
-/***/ }),
-/* 4 */
+/* 0 */
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
@@ -1584,11 +654,971 @@ class DiGraph {
 
 
 /***/ }),
+/* 1 */,
+/* 2 */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_0__lib_shadow_js__ = __webpack_require__(3);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__lib_orthemb_js__ = __webpack_require__(4);
+importScripts('lalolib/lalolib.js');
+importScripts('lodash.min.js');
+
+importScripts('planarmap-em/libplanarmap-em.js');
+
+
+
+
+function leastSquares(X /* : Matrix */, Y /* : Matrix */) /* : leastSquares */ {
+    //console.log("X", X, inv(X), det(X), qr(X, true), Y);
+    let betaHat = solve(mul(X, transpose(X)), mul(X, Y));
+
+    return betaHat;
+}
+
+class ForceLinkDiagram {
+    /* Link diagram embedding improved by ImPrEd */
+    constructor (verts, edges, faces) {
+        this.verts = verts;
+        this.edges = edges;
+        this.faces = faces;
+
+        //console.log("+++++++");
+        //console.log(verts);
+        //console.log(edges);
+        //console.log(faces);
+
+        this.adjMap = {};
+        for (let edge of edges) {
+            let [a, b] = edge;
+            if (a in this.adjMap) {
+                this.adjMap[a].push(b);
+            } else {
+                this.adjMap[a] = [b];
+            }
+
+            if (b in this.adjMap) {
+                this.adjMap[b].push(a);
+            } else {
+                this.adjMap[b] = [a];
+            }
+        }
+
+        this.delta = 2;
+        this.gamma = 5;
+
+        this.dbar = 3*this.delta;
+
+        this.aExp = 1;
+        this.erExp = 2;
+
+        this.calculateSurroundingEdges();
+    }
+
+    distance(u, v) {
+        return norm(sub(u, v));
+    }
+
+    forceAvert(u, v) {
+        //console.log(this.distance(u,v));
+        return mul(Math.pow(this.distance(u, v)/this.delta, this.aExp),
+                   sub(v, u));
+    }
+
+    forceRvert(u, v) {
+        let d = this.distance(u, v);
+        return mul(Math.pow(this.delta/d, this.erExp),
+                   sub(u, v));
+    }
+
+    computeVe(v, a, b) {
+        let m = (a[1] - b[1])/(a[0] - b[0]);
+        let n = -1 / m;
+        let c = a[1] - m*a[0];
+        let d = v[1] - n*v[0];
+
+        let x = (d - c) / (m - n);
+        return [x, m*x + c];
+    }
+
+    veOnEdge(ve, a, b) {
+        return (((ve[0] <= a[0] && ve[0] >= b[0]) ||
+                 (ve[0] <= b[0] && ve[0] >= a[0])) &&
+                ((ve[1] <= a[1] && ve[1] >= b[1]) ||
+                 (ve[1] <= b[1] && ve[1] >= a[1])));
+    }
+
+    forceRedge(u, a, b, ve) {
+        let d = this.distance(u, ve);
+        if (d >= this.gamma) {
+            // node and "virtual edge" too far
+            return [0, 0];
+        }
+
+        return mul(-Math.pow(this.gamma - d, this.erExp)/d,
+                   sub(ve, u));
+    }
+
+    surroundingEdges(ui) {
+        // calculate the surrounding edges SUi
+        let edges = [];
+        for (let face of this.faces) {
+            if (face.includes(ui)) {
+                if (ui == 63) {
+                    console.log(face);
+                }
+                for (let i = 0; i < face.length-1; i++) {
+                    console.assert(this.edges.filter(
+                        e => ((e[0] == face[i] && e[1] == face[i+1]) ||
+                              (e[1] == face[i] && e[0] == face[i+1]))).length > 0);
+                    edges.push([face[i], face[i+1]]);
+                }
+                edges.push([face[face.length-1], face[0]]);
+            }
+        }
+        return edges;
+    }
+
+    calculateSurroundingEdges() {
+        this.surrEdges = [];
+        for (let i = 0; i < this.verts.length; i++) {
+            this.surrEdges[i] = this.surroundingEdges(i);
+        }
+    }
+
+    move (ui, FUx, FUy, MU) {
+        let i;
+        if (FUx >= 0) {
+            if (FUy >= 0) {
+                if (FUx >= FUy) {
+                    i = 0;
+                } else {
+                    i = 1;
+                }
+            } else {
+                if (FUx >= -FUy) {
+                    i = 7;
+                } else {
+                    i = 6;
+                }
+            }
+        } else {
+            if (FUy >= 0) {
+                if (-FUx >= FUy) {
+                    i = 3;
+                } else {
+                    i = 2;
+                }
+            } else {
+                if (-FUx >= -FUy) {
+                    i = 4;
+                } else {
+                    i = 5;
+                }
+            }
+        }
+
+        let FU = [FUx, FUy];
+
+        let fU = norm(FU);
+        let du;
+        if (fU <= MU[i]) {
+            du = FU;
+        } else {
+            du = mul(MU[i]/fU, FU);
+        }
+
+        //if (ui == 9) {
+        //    console.log(ui, i, du, FU, MU[i]);
+        //}
+
+        //console.log(this.verts[ui], du, FU, MU);
+        this.verts[ui][0] += du[0];
+        this.verts[ui][1] += du[1];
+        //console.log(FU, MU[i], du, this.verts[ui]);
+    }
+
+    update() {
+        //console.log(this.adjMap);
+        let FX = zeros(this.verts.length);
+        let FY = zeros(this.verts.length);
+        let M = [];
+        for (let i = 0; i < this.verts.length; i++) {
+            M.push([this.dbar, this.dbar, this.dbar, this.dbar,
+                    this.dbar, this.dbar, this.dbar, this.dbar]);
+        }
+
+        let barycenter = mul(1/this.verts.length, sum(this.verts, 2));
+
+        for (let ui = 0; ui < this.verts.length; ui++) {
+            // Calculate gravity force
+            let db = sub(barycenter, this.verts[ui]);
+            let nDb = norm(db);
+            FX[ui] += db[0]/nDb;
+            FY[ui] += db[1]/nDb;
+
+            // Calculate total node-node repulsive force
+            for (let vi = 0; vi < this.verts.length; vi++) {
+                if (ui != vi) {
+                    if (this.distance(ui, vi) >= 3*this.delta) {
+                        continue;
+                    }
+
+                    if (this.adjMap[ui].length == 2) {
+                        if (this.adjMap[ui].includes(vi)) {
+                            continue;
+                        }
+                    }
+
+                    let F = this.forceRvert(this.verts[ui], this.verts[vi]);
+                    //console.log("Fnnr", F);
+                    //console.log(ui, vi, this.verts[ui], this.verts[vi], "Fnnr", F);
+                    if (!isNaN(F[0])) {
+                        FX[ui] += F[0];
+                        FY[ui] += F[1];
+                    }
+                }
+            }
+
+            // calculate edge attractive force
+            for (let vi of this.adjMap[ui]) {
+                let F = this.forceAvert(this.verts[ui], this.verts[vi]);
+
+                FX[ui] += F[0];
+                FY[ui] += F[1];
+            }
+
+            // calculate node-edge repulsive force
+            for (let edge of this.surrEdges[ui]) {
+                let [ai, bi] = edge;
+                if (ui == ai || ui == bi) {
+                    continue;
+                }
+                let ve = this.computeVe(
+                    this.verts[ui], this.verts[ai], this.verts[bi]);
+
+                if (this.veOnEdge(ve, this.verts[ai], this.verts[bi])) {
+                    let F = this.forceRedge(
+                        this.verts[ui], this.verts[ai], this.verts[bi], ve);
+                    if (!isNaN(F[0])) {
+                        FX[ui] += F[0];
+                        FY[ui] += F[1];
+                    }
+                }
+            }
+
+            let MU = M[ui];
+            //console.log("Surr:", this.surrEdges);
+
+            for (let edge of this.surrEdges[ui]) {
+                let [ai, bi] = edge;
+                if (ui == ai || ui == bi) {
+                    continue;
+                }
+                let ve = this.computeVe(
+                    this.verts[ui], this.verts[ai], this.verts[bi]);
+
+                let cv;
+
+                if (ui == 0 && ai == 5 && bi == 2) {
+                    //console.log(this.verts[ai], this.verts[bi], ve);
+                }
+                //console.log("v-e", ui, ai, bi);
+                if (this.veOnEdge(ve, this.verts[ai], this.verts[bi])) {
+                    cv = sub(ve, this.verts[ui]);
+
+                    let i;
+                    if (cv[0] >= 0) {
+                        if (cv[1] >= 0) {
+                            if (cv[0] >= cv[1]) {
+                                i = 0;
+                            } else {
+                                i = 1;
+                            }
+                        } else {
+                            if (cv[0] >= -cv[1]) {
+                                i = 7;
+                            } else {
+                                i = 6;
+                            }
+                        }
+                    } else {
+                        if (cv[1] >= 0) {
+                            if (-cv[0] >= cv[1]) {
+                                i = 3;
+                            } else {
+                                i = 2;
+                            }
+                        } else {
+                            if (-cv[0] >= -cv[1]) {
+                                i = 4;
+                            } else {
+                                i = 5;
+                            }
+                        }
+                    }
+
+                    let maxR = norm(cv)/2.1;
+                    //console.log("???", cv);
+
+                    //console.log(MU, maxR, Math.cos(Math.atan2(cv[1], cv[0])));
+                    let ell = (i+4)%8;
+                    for (let j = 0; j < MU.length; j++) {
+                        if ((i-j+8)%8 == 0) {
+                            MU[j] = min(MU[j], maxR);
+                        } else if ((i-j+8)%8 == 1 || (i-j+8)%8 == 2) {
+                            MU[j] = min(MU[j], maxR /
+                                         Math.cos(Math.atan2(cv[1], cv[0]) - (j+1)*Math.PI/4));
+                        } else if ((i-j+8)%8 == 6 || (i-j+8)%8 == 7) {
+                            MU[j] = min(MU[j], maxR /
+                                         Math.cos(Math.atan2(cv[1], cv[0]) - (j)*Math.PI/4));
+                        }
+                    }
+
+                    for (let j = 0; j < MU.length; j++) {
+                        if ((ell-j+8)%8 == 0) {
+                            M[ai][j] = min(M[ai][j], maxR);
+                        } else if ((ell-j+8)%8 == 1 || (ell-j+8)%8 == 2) {
+                            M[ai][j] = min(M[ai][j], maxR /
+                                           Math.cos(Math.atan2(-cv[1], -cv[0]) - (j+1)*Math.PI/4));
+                        } else if ((ell-j+8)%8 == 6 || (ell-j+8)%8 == 7) {
+                            M[ai][j] = min(M[ai][j], maxR /
+                                           Math.cos(Math.atan2(-cv[1], -cv[0]) - (j)*Math.PI/4));
+                        }
+                    }
+
+                    for (let j = 0; j < MU.length; j++) {
+                        if ((ell-j+8)%8 == 0) {
+                            M[bi][j] = min(M[bi][j], maxR);
+                        } else if ((ell-j+8)%8 == 1 || (ell-j+8)%8 == 2) {
+                            M[bi][j] = min(M[bi][j], maxR /
+                                           Math.cos(Math.atan2(-cv[1], -cv[0]) - (j+1)*Math.PI/4));
+                        } else if ((ell-j+8)%8 == 6 || (ell-j+8)%8 == 7) {
+                            M[bi][j] = min(M[bi][j], maxR /
+                                           Math.cos(Math.atan2(-cv[1], -cv[0]) - (j)*Math.PI/4));
+                        }
+                    }
+
+                } else {
+                    let va = sub(this.verts[ai], this.verts[ui]);
+                    let vb = sub(this.verts[bi], this.verts[ui]);
+                    if (norm(va) < norm(vb)) {
+                        cv = va;
+                    } else {
+                        cv = vb;
+                    }
+
+                    let i;
+                    if (cv[0] >= 0) {
+                        if (cv[1] >= 0) {
+                            if (cv[0] >= cv[1]) {
+                                i = 0;
+                            } else {
+                                i = 1;
+                            }
+                        } else {
+                            if (cv[0] >= -cv[1]) {
+                                i = 7;
+                            } else {
+                                i = 6;
+                            }
+                        }
+                    } else {
+                        if (cv[1] >= 0) {
+                            if (-cv[0] >= cv[1]) {
+                                i = 3;
+                            } else {
+                                i = 2;
+                            }
+                        } else {
+                            if (-cv[0] >= -cv[1]) {
+                                i = 4;
+                            } else {
+                                i = 5;
+                            }
+                        }
+                    }
+
+                    let maxR = norm(cv)/2.1;
+                    //console.log("???", cv);
+
+                    //console.log(MU, maxR, Math.cos(Math.atan2(cv[1], cv[0])));
+                    let ell = (i+4)%8;
+                    for (let j = 0; j < MU.length; j++) {
+                        if ((i-j+8)%8 == 0) {
+                            MU[j] = min(MU[j], maxR);
+                        } else if ((i-j+8)%8 == 1 || (i-j+8)%8 == 2) {
+                            MU[j] = min(MU[j], maxR /
+                                         Math.cos(Math.atan2(cv[1], cv[0]) - (j+1)*Math.PI/4));
+                        } else if ((i-j+8)%8 == 6 || (i-j+8)%8 == 7) {
+                            MU[j] = min(MU[j], maxR /
+                                         Math.cos(Math.atan2(cv[1], cv[0]) - (j)*Math.PI/4));
+                        }
+                    }
+
+                    let m = cv[1]/cv[0]; // Slope of cv
+                    let n = -1 / m; // Slope of l
+
+                    for (let j = 0; j < MU.length; j++) {
+                        if ((ell-j+8)%8 == 0) {
+                            M[ai][j] = min(M[ai][j], maxR);
+                        } else if ((ell-j+8)%8 == 1 || (ell-j+8)%8 == 2) {
+                            M[ai][j] = min(M[ai][j], maxR /
+                                           Math.cos(Math.atan2(-cv[1], -cv[0]) - (j+1)*Math.PI/4));
+                        } else if ((ell-j+8)%8 == 6 || (ell-j+8)%8 == 7) {
+                            M[ai][j] = min(M[ai][j], maxR /
+                                           Math.cos(Math.atan2(-cv[1], -cv[0]) - (j)*Math.PI/4));
+                        }
+                    }
+
+                    for (let j = 0; j < MU.length; j++) {
+                        if ((ell-j+8)%8 == 0) {
+                            M[bi][j] = min(M[bi][j], maxR);
+                        } else if ((ell-j+8)%8 == 1 || (ell-j+8)%8 == 2) {
+                            M[bi][j] = min(M[bi][j], maxR /
+                                           Math.cos(Math.atan2(-cv[1], -cv[0]) - (j+1)*Math.PI/4));
+                        } else if ((ell-j+8)%8 == 6 || (ell-j+8)%8 == 7) {
+                            M[bi][j] = min(M[bi][j], maxR /
+                                           Math.cos(Math.atan2(-cv[1], -cv[0]) - (j)*Math.PI/4));
+                        }
+                    }
+                }
+
+            }
+            //if (ui == 0) console.log("MU0", MU, FX[ui], FY[ui]);
+        }
+
+        //console.log("Fx", FX);
+        for (let ui in this.verts) {
+
+            this.move(ui, FX[ui], FY[ui], M[ui]);
+        }
+    }
+}
+
+function sleep(millis)
+{
+    var date = new Date();
+    var curDate = null;
+    do { curDate = new Date(); }
+    while(curDate-date < millis);
+}
+
+self.randomDiagram = Module.cwrap('randomDiagram', 'number',
+                                  ['number', 'number', 'number', 'number', 'number']);
+
+function randomDiagram(n_verts, n_comps, max_att, type) {
+    let vertPtr = Module._malloc(4);
+
+    let nVerts = self.randomDiagram(10, 1, 50, 0, vertPtr);
+    let vertArray = Module.getValue(vertPtr, "i32*");
+
+    let view = Module.HEAP32.subarray(vertArray/4, vertArray/4+(4*nVerts));
+
+    let pd = [];
+    for (let vi = 0; vi < nVerts; vi++) {
+        let vert = [];
+        for (let pos = 0; pos < 4; pos++) {
+            vert.push(view[vi*4+pos]);
+        }
+        pd.push(vert);
+    }
+
+    Module._free(vertArray);
+    Module._free(vertPtr);
+
+    return pd;
+}
+
+var workerFunctions = {
+    setLinkDiagram: function(sigma, crossBend) {
+        let D = randomDiagram(10, 1, 50, 0)
+        console.log(D);
+
+        self.shadow = new __WEBPACK_IMPORTED_MODULE_0__lib_shadow_js__["a" /* default */](sigma);
+        self.orthShadow = new __WEBPACK_IMPORTED_MODULE_1__lib_orthemb_js__["a" /* default */](self.shadow);
+
+        self.orthShadow.orthogonalRep();
+
+        workerFunctions.embedDiagram();
+    },
+
+    embedDiagram: function() {
+        let tstart = Date.now();
+
+        let thresh = 5e-10;
+    }
+}
+
+onmessage = function(e) {
+    workerFunctions[e.data.function](...e.data.arguments);
+}
+
+
+/***/ }),
+/* 3 */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+class Arc {
+    constructor(index) {
+        this.index = index;
+    }
+
+    toString() {
+        return this.index.toString();
+    }
+
+    valueOf() {
+        return this.index;
+    }
+}
+
+class LinkShadow {
+    constructor(verts) {
+        this.nv = verts.length;
+        this.ne = this.nv*2;
+        this.na = this.nv*4;
+
+        this.arcs = [];
+        this.edges = [];
+        this.verts = [];
+
+        // Edge i is canonically of the form [2i, 2i+1]
+        for (let ei = 0; ei < this.ne; ei++) {
+            //console.log(ei);
+            this.newArc(2*ei);
+            this.newArc(2*ei+1);
+            //console.log(this.arcs)
+
+            this.setEdge(ei, [2*ei, 2*ei+1]);
+        }
+
+        // Set verts by looking through verts
+        for (let vi in verts) {
+            this.setVert(vi, verts[vi]);
+        }
+
+        this.generateFaces();
+        this.generateComponents();
+        this.connectArcs();
+    }
+
+    copy() {
+        let link = new LinkShadow(this.verts.map(
+            v => v.map(a => a.index)
+        ));
+
+        return link;
+    }
+
+    generateFaces() {
+        let leftArcs = new Set(this.arcs);
+        this.faces = [];
+
+        while(leftArcs.size > 0) {
+            let startArc = Array.from(leftArcs).pop();
+
+            let face = [];
+            let arc = startArc;
+            let _failsafe = 0;
+            do {
+                leftArcs.delete(arc);
+                face.push(arc);
+                arc.face = this.faces.length;
+                //console.log(arc);
+
+                let oArc = this.edges[arc.edge][(arc.edgepos+1)%2];
+                arc = this.verts[oArc.vert][(oArc.vertpos+1)%4];
+                //console.log(arc);
+                _failsafe += 1;
+                if (_failsafe > 500) {
+                    console.log("Failure");
+                    return this.faces;
+                }
+            } while (arc != startArc)
+
+            //face.reverse();
+            this.faces.push(face);
+        }
+        return this.faces;
+    }
+
+    generateComponents(oneOrient=true) {
+        let leftArcs = new Set(this.arcs);
+
+        this.components = [];
+        while (leftArcs.size > 0) {
+            let startArc = Array.from(leftArcs).pop();
+
+            let component = this.component(startArc);
+            for (let arc of component) {
+                leftArcs.delete(arc);
+                if (oneOrient) {
+                    // Delete the other arc edge-opposite this one
+                    leftArcs.delete(this.edges[arc.edge][(arc.edgepos+1)%2]);
+                }
+            }
+
+            this.components.push(component);
+        }
+        return this.components;
+    }
+
+    component(arc) {
+        let startArc = arc;
+
+        let component = [];
+        do {
+            component.push(arc);
+
+            let oArc = this.edges[arc.edge][(arc.edgepos+1)%2];
+            arc = this.verts[oArc.vert][(oArc.vertpos+2)%4];
+        } while (arc != startArc)
+
+        return component;
+    }
+
+    outVertI(arc) {
+        return arc.vert;
+    }
+
+    inVertI(arc) {
+        return this.edgeOpposite(arc).vert;
+    }
+
+    edgeOpposite(arc) {
+        return this.edges[arc.edge][(arc.edgepos+1)%2];
+    }
+    vertNext(arc) {
+        return this.verts[arc.vert][(arc.vertpos+1)%4];
+    }
+    vertPrev(arc) {
+        return this.verts[arc.vert][(arc.vertpos+3)%4];
+    }
+
+    newArc(idx) {
+        if (idx === undefined) { idx = this.arcs.length; }
+
+        this.arcs[idx] = new Arc(idx);
+        // {index: idx, edge:undefined, edgepos:undefined, vert:undefined, vertpos:undefined};
+        return this.arcs[idx];
+    }
+
+    connectArcs() {
+        /* Hook up the arcs so they know, locally, their linkings */
+
+        for (let arc of this.arcs) {
+            arc.edgeOpposite = this.edgeOpposite(arc);
+            arc.vertNext = this.vertNext(arc);
+            arc.vertPrev = this.vertPrev(arc);
+        }
+    }
+
+    setEdge(idx, ais) {
+        this.edges[idx] = ais.map((ai) => {return this.arcs[ai];}, this);
+
+        for (let i in ais) {
+            this.arcs[ais[i]].edge = idx;
+            this.arcs[ais[i]].edgepos = parseInt(i);
+        }
+    }
+
+    setVert(idx, ais) {
+        this.verts[idx] = ais.map((ai) => {return this.arcs[ai];}, this);
+
+        for (let i in ais) {
+            if (ais[i] === undefined) { continue; }
+
+            this.arcs[ais[i]].vert = parseInt(idx);
+            this.arcs[ais[i]].vertpos = parseInt(i);
+        }
+    }
+}
+/* harmony export (immutable) */ __webpack_exports__["a"] = LinkShadow;
+
+
+
+/***/ }),
+/* 4 */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_0__digraph_js__ = __webpack_require__(0);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__orthrep_js__ = __webpack_require__(5);
+
+
+
+class Face {
+    constructor (link, arcs, exterior=false) {
+        this.link = link;
+        this.arcs = arcs;
+        this.exterior = exterior;
+
+        // this.edges is array of [arc1index, arc2index] around the face
+        // this.edges = this.arcs.map(a => this.link.edges[a.edge].map(b => b.index));
+        this.edges = this.arcs.map(a => a.edge);
+        this.edgeMap = []; for (let arc of this.arcs) { this.edgeMap[arc.edge] = arc; }
+
+        this.turns = this.arcs.map(a => 1);
+    }
+
+    edgeOfIntersection(other) {
+        let commonEdges = this.edges.filter(e => other.edges.some(oe => e == oe));
+        if (commonEdges.length > 0) {
+            let e = commonEdges.pop();
+            return [this.edgeMap[e], other.edgeMap[e]];
+        }
+        return null;
+    }
+
+    sourceCapacity() {
+        return (this.exterior ? 0 :
+                Math.max(4 - this.arcs.length, 0));
+    }
+
+    sinkCapacity() {
+        return (this.exterior ? this.arcs.length + 4 :
+                Math.max(this.arcs.length - 4, 0));
+    }
+
+    bend(arc, turns) {
+        let i = this.arcs.indexOf(arc);
+        //turns.reverse();
+
+        for (let t of turns) {
+            arc = arc.edgeOpposite.vertNext;
+            //arc = arc.vertPrev.edgeOpposite;
+            this.arcs.splice(i+1, 0, arc);
+            this.turns.splice(i+1, 0, t);
+            i += 1;
+        }
+    }
+
+    *iterateFrom(arc) {
+        let ai = this.arcs.indexOf(arc);
+        for (let i = ai+1; i < this.arcs.length; i++) {
+            yield [this.arcs[i], this.turns[i]];
+        }
+        for (let i = 0; i < ai+1; i++) {
+            yield [this.arcs[i], this.turns[i]];
+        }
+    }
+
+    orientEdges(arc, orientation) {
+        const dirs = ["left", "up", "right", "down"];
+        console.assert(this.isValid(), this);
+        let dir = dirs.indexOf(orientation);
+        let ans = new Map();
+        for (let [a, t] of this.iterateFrom(arc)) {
+            dir = (dir+t+4)%4;
+            ans.set(a.index, dirs[dir]);
+            ans.set(a.edgeOpposite.index, dirs[(dir+2)%4]);
+        }
+        return ans;
+    }
+
+    isValid() {
+        let face = [];
+        let start = this.arcs[0];
+        let arc = start;
+        while (!face.includes(arc.index)) {
+            face.push(arc.index);
+            arc = arc.edgeOpposite.vertNext;
+        }
+
+        return this.arcs.reduce((val, a, i) => val && (a.index == face[i]), true);
+    }
+
+}
+
+class OrthogonalDiagramEmbedding {
+    constructor (shadow) {
+        this.shadow = shadow.copy();
+
+        this.faces = this.shadow.faces.map(f => new Face(this.shadow, f));
+        let F = this.faces.reduce(
+            (bigF, f) => (bigF.arcs.length >= f.arcs.length) ? bigF : f);
+        F.exterior = true;
+
+        this.faceNetwork = this.flowNetwork();
+        this.bend();
+        this.orientEdges();
+
+        this.edges = this.faces.reduce((all, f) => all.concat(f.arcs), []);
+        this.repairComponents();
+    }
+
+    flowNetwork() {
+        let G = new __WEBPACK_IMPORTED_MODULE_0__digraph_js__["a" /* default */]();
+
+        let sourceDemand = this.faces.reduce(
+            (tot, f) => (tot + f.sourceCapacity()), 0);
+        G.addNode('s', {demand: -sourceDemand});
+        for (let fi = 0; fi < this.faces.length; fi++) {
+            let sourceCapacity = this.faces[fi].sourceCapacity();
+            if (sourceCapacity > 0) {
+                G.addEdge('s', fi, {weight: 0, capacity: sourceCapacity});
+            }
+        }
+
+        let sinkDemand = this.faces.reduce(
+            (tot, f) => (tot + f.sinkCapacity()), 0);
+        G.addNode('t', {demand: sinkDemand});
+        for (let fi = 0; fi < this.faces.length; fi++) {
+            let sinkCapacity = this.faces[fi].sinkCapacity();
+            if (sinkCapacity > 0) {
+                G.addEdge(fi, 't', {weight: 0, capacity: sinkCapacity});
+            }
+        }
+
+        for (let ai = 0; ai < this.faces.length; ai++) {
+            for (let bi = 0; bi < this.faces.length; bi++) {
+                if (ai != bi &&
+                    this.faces[ai].edgeOfIntersection(this.faces[bi]) != null) {
+                    G.addEdge(ai, bi, {weight: 1});
+                }
+            }
+        }
+
+        console.log(G);
+        return G;
+    }
+
+    bend() {
+        let flow = this.faceNetwork.minCostFlow()[1];
+        console.log(flow);
+
+        for (let [a, flows] of flow) {
+            for (let [b, w_a] of flows) {
+                //console.log(a, b, w_a);
+                if (!w_a || a == 's' || b == 's' || a == 't' || b == 't') {
+                    continue;
+                }
+
+                let w_b = flow.get(b).get(a);
+
+                let [A, B] = [this.faces[a], this.faces[b]];
+                console.log(a, b, A, B);
+                let [arc_ai, arc_bi] = A.edgeOfIntersection(B);
+
+                let arc_a = this.shadow.arcs[arc_ai];
+                let arc_b = this.shadow.arcs[arc_bi];
+
+                let turnsA = (new Array(w_a).fill(1)).concat(
+                    (new Array(w_b).fill(-1)));
+                let turnsB = (new Array(w_b).fill(1)).concat(
+                    (new Array(w_a).fill(-1)));
+
+                this.subdivideEdge(arc_a, turnsA.length);
+
+                A.bend(arc_a, turnsA);
+                B.bend(arc_b, turnsB);
+            }
+        }
+    }
+
+    subdivideEdge(arc, n) {
+        let head = arc;
+        let tail;
+        let backwards = !this.shadow.components.some(c => c.includes(arc));
+        if (backwards) {
+            tail = head;
+            head = tail.edgeOpposite;
+        } else {
+            tail = head.edgeOpposite;
+        }
+
+        let strands = (new Array(2*n).fill(0)).map(i => this.shadow.newArc());
+        strands.splice(0, 0, head);
+        strands.push(tail);
+
+        // Glue edges
+        for (let si = 0; si < strands.length; si += 2) {
+            strands[si].edgeOpposite = strands[si+1];
+            strands[si+1].edgeOpposite = strands[si];
+
+            this.shadow.setEdge(this.shadow.edges.length,
+                                [strands[si].index, strands[si+1].index]);
+        }
+
+        // Glue degree 2 joints
+        for (let si = 1; si < strands.length-1; si += 2) {
+            strands[si].vertNext = strands[si+1];
+            strands[si].vertPrev = strands[si+1];
+
+            strands[si+1].vertNext = strands[si];
+            strands[si+1].vertPrev = strands[si];
+
+            this.shadow.setVert(this.shadow.verts.length,
+                                [strands[si].index, undefined, strands[si+1].index, undefined]);
+        }
+    }
+
+    repairComponents() {
+        this.arcComponentMap = new Map();
+        this.orderedArcs = [];
+
+        for (let i = 0; i < this.shadow.components.length; i++) {
+            for (let arc of this.shadow.components[i]) {
+                this.arcComponentMap.set(arc.index, i);
+                this.orderedArcs.push(arc);
+            }
+        }
+    }
+
+    orientEdges() {
+        let orientations = [];
+        orientations[this.faces[0].arcs[0].index] = 'right';
+
+        let G = this.faceNetwork.copy();
+        G.removeNode('s');
+        G.removeNode('t');
+
+        for (let node of G.depthFirstSearch(0)) {
+            let F = this.faces[node];
+            for (let arc of F.arcs) {
+                if (arc.index in orientations) {
+                    let newOrientations = F.orientEdges(
+                        arc, orientations[arc.index]);
+                    for (let [a, dir] of newOrientations) {
+                        if (a in orientations) {
+                            console.assert(orientations[a] == dir, orientations, a, dir);
+                        } else {
+                            orientations[a] = dir;
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+
+        //console.assert(orientations.length, orientations);
+        this.orientations = orientations;
+    }
+
+    orthogonalSpec() {
+        return ['right', 'up'].map(
+            dir => this.edges.filter(a => this.orientations[a.index] == dir).map(
+                a => [a.vert, a.edgeOpposite.vert] // TODO
+            ));
+    }
+
+    orthogonalRep() {
+        console.log(this.orthogonalSpec());
+    }
+}
+/* harmony export (immutable) */ __webpack_exports__["a"] = OrthogonalDiagramEmbedding;
+
+
+
+/***/ }),
 /* 5 */
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_0__digraph_js__ = __webpack_require__(4);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_0__digraph_js__ = __webpack_require__(0);
 
 
 class OrthogonalFace {

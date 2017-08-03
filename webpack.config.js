@@ -16,7 +16,9 @@ module.exports = {
     devtool: "source-map",
     entry: {
         "orthogonal": "./src/orthogonal.js",
-        "orth_worker": "./src/orth_worker.js"
+        "orth_worker": "./src/orth_worker.js",
+        "cp_worker": "./src/cp_worker.js",
+        "index": "./src/index.js"
     },
     output: {
         filename: "js/[name].js"

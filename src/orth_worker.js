@@ -1,6 +1,8 @@
 importScripts('lalolib/lalolib.js');
 importScripts('lodash.min.js');
 
+importScripts('planarmap-em/libplanarmap-em.js');
+
 import LinkShadow from "./lib/shadow.js";
 import OrthogonalDiagramEmbedding from "./lib/orthemb.js";
 
@@ -439,9 +441,37 @@ function sleep(millis)
     while(curDate-date < millis);
 }
 
+self.randomDiagram = Module.cwrap('randomDiagram', 'number',
+                                  ['number', 'number', 'number', 'number', 'number']);
+
+function randomDiagram(n_verts, n_comps, max_att, type) {
+    let vertPtr = Module._malloc(4);
+
+    let nVerts = self.randomDiagram(10, 1, 50, 0, vertPtr);
+    let vertArray = Module.getValue(vertPtr, "i32*");
+
+    let view = Module.HEAP32.subarray(vertArray/4, vertArray/4+(4*nVerts));
+
+    let pd = [];
+    for (let vi = 0; vi < nVerts; vi++) {
+        let vert = [];
+        for (let pos = 0; pos < 4; pos++) {
+            vert.push(view[vi*4+pos]);
+        }
+        pd.push(vert);
+    }
+
+    Module._free(vertArray);
+    Module._free(vertPtr);
+
+    return pd;
+}
 
 var workerFunctions = {
     setLinkDiagram: function(sigma, crossBend) {
+        let D = randomDiagram(10, 1, 50, 0)
+        console.log(D);
+
         self.shadow = new LinkShadow(sigma);
         self.orthShadow = new OrthogonalDiagramEmbedding(self.shadow);
 

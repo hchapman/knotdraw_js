@@ -1,4 +1,5 @@
 importScripts('lalolib/lalolib.js');
+importScripts('planarmap-em/libplanarmap-em.js');
 
 function least_squares(X /* : Matrix */, Y /* : Matrix */) /* : least_squares */ {
     //console.log("X", X, inv(X), det(X), qr(X, true), Y);
@@ -1304,8 +1305,42 @@ function sleep(millis)
     while(curDate-date < millis);
 }
 
+self.randomDiagram = Module.cwrap('randomDiagram', 'number',
+                                  ['number', 'number', 'number', 'number', 'number', 'number']);
+
+function randomDiagram(n_verts, n_comps, max_att, type) {
+    let vertPtr = Module._malloc(4);
+
+    let nVerts = self.randomDiagram(10, 1, 50, 0, Math.random()*(2**32), vertPtr);
+    let vertArray = Module.getValue(vertPtr, "i32*");
+
+    let view = Module.HEAP32.subarray(vertArray/4, vertArray/4+(4*nVerts));
+
+    let pd = [];
+    for (let vi = 0; vi < nVerts; vi++) {
+        let vert = [];
+        for (let pos = 0; pos < 4; pos++) {
+            vert.push(view[vi*4+pos]);
+        }
+        pd.push(vert);
+    }
+
+    Module._free(vertArray);
+    Module._free(vertPtr);
+
+    return pd;
+}
 
 var workerFunctions = {
+    randomDiagram: function(n_verts, n_comps, max_att, type) {
+        return randomDiagram(n_verts, n_comps, max_att, type);
+    },
+
+    setRandomLinkDiagram: function(n_verts, n_comps, max_att, type) {
+        let sigma = randomDiagram(n_verts, n_comps, max_att, type);
+        workerFunctions.setLinkDiagram(sigma, 8);
+    },
+
     setLinkDiagram: function(sigma, cross_bend) {
         self.shadow = new LinkShadow(sigma);
 
@@ -1425,7 +1460,7 @@ var workerFunctions = {
             }
         }
 
-        console.log("minD: ", mind)
+        console.log("minD: ", mind);
 
         // Create an embedded graph without scaffolding
         let l_verts = [];
