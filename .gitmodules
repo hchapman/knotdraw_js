@@ -1,0 +1,3 @@
+[submodule "planarmap"]
+	path = planarmap
+	url = git@github.com:hchapman/planarmap.git
