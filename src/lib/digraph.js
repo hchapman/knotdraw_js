@@ -4,6 +4,8 @@ export default class DiGraph {
     constructor() {
         this.nodes = new Map();
         this.edges = new Map();
+
+        this.redges = new Map();
     }
 
     copy() {
@@ -11,6 +13,9 @@ export default class DiGraph {
         G.nodes = new Map(this.nodes);
         for (let [u, sinks] of this.edges) {
             G.edges.set(u, new Map(this.edges.get(u)));
+        }
+        for (let [v, sources] of this.redges) {
+            G.redges.set(v, new Map(this.redges.get(v)));
         }
         return G;
     }
@@ -30,6 +35,9 @@ export default class DiGraph {
         if (!this.edges.has(name)) {
             this.edges.set(name, new Map());
         }
+        if (!this.redges.has(name)) {
+            this.redges.set(name, new Map());
+        }
     }
 
     removeNode(name) {
@@ -37,6 +45,9 @@ export default class DiGraph {
         this.edges.delete(name);
         for (let [source, sinks] of this.edges) {
             sinks.delete(name);
+        }
+        for (let [sink, sources] of this.redges) {
+            sources.delete(name);
         }
     }
 
@@ -50,6 +61,7 @@ export default class DiGraph {
         this.edges.get(source).set(sink, {source: source, sink: sink});
 
         let edge = this.edges.get(source).get(sink);
+        this.redges.get(sink).set(source, edge);
 
         if (attrs !== undefined) {
             for (let [k, v] of Object.entries(attrs)) {
@@ -63,6 +75,9 @@ export default class DiGraph {
     removeEdge(source, sink) {
         if (this.edges.has(source)) {
             this.edges.get(source).delete(sink);
+        }
+        if (this.redges.has(sink)) {
+            this.redges.get(sink).delete(source);
         }
     }
 
@@ -89,19 +104,32 @@ export default class DiGraph {
     }
 
     getReverseEdges() {
-        let rev_edges = new Map();
-        for (let [v, d] of this.nodes) {
-            rev_edges.set(v, new Map());
+        return this.redges;
+    }
+
+    incidentEdges(vert) {
+        let ans = [];
+        for (let [sink, data] of this.edges.get(vert)) {
+            ans.push(data);
         }
-        for (let [u, sinks] of this.edges) {
-            for (let [v, d] of sinks) {
-                if (!rev_edges.has(v)) {
-                    rev_edges.set(v, new Map());
-                }
-                rev_edges.get(v).set(u, {});
-            }
+        for (let [source, data] of this.redges.get(vert)) {
+            ans.push(data);
         }
-        return rev_edges;
+        return ans;
+    }
+
+    incoming(vert) {
+        return Array.from(this.redges.get(vert).values());
+    }
+    outgoing(vert) {
+        return Array.from(this.edges.get(vert).values());
+    }
+
+    outdegree(vert) {
+        return this.outgoing(vert).length;
+    }
+    indegree(vert) {
+        return this.incoming(vert).length;
     }
 
     treePath(start, stop) {
@@ -192,6 +220,12 @@ export default class DiGraph {
         }
 
         return components;
+    }
+
+    weakComponents() {
+        return this.connectedComponentSubgraphs().map(
+            c => Array.from(c.nodes.keys())
+        );
     }
 
     *depthFirstSearch(start) {

@@ -469,13 +469,35 @@ function randomDiagram(n_verts, n_comps, max_att, type) {
 
 var workerFunctions = {
     setLinkDiagram: function(sigma, crossBend) {
-        let D = randomDiagram(10, 1, 50, 0)
-        console.log(D);
-
         self.shadow = new LinkShadow(sigma);
         self.orthShadow = new OrthogonalDiagramEmbedding(self.shadow);
 
-        self.orthShadow.orthogonalRep();
+        let rep = self.orthShadow.orthogonalRep();
+        console.log(rep);
+        let spec = self.orthShadow.orthogonalSpec();
+        console.log(spec);
+        let gridEmb = rep.basicGridEmbedding();
+
+        let verts = [];
+        for (let [i, vert] of gridEmb) {
+            verts[i] = vert;
+        }
+        let edges = [];
+        for (let [source, sink, data] of rep.graph.edgeGen()) {
+            edges.push([source, sink]);
+        }
+        let faces = rep.faces.map(f => f.evPairs.map(ev => ev[1]));
+
+        console.log(verts);
+        console.log(edges);
+        console.log(faces);
+
+        self.force_shadow = new ForceLinkDiagram(verts, edges, faces);
+
+        postMessage({
+            function: "setLinkDiagram",
+            arguments: [self.force_shadow]
+        });
 
         workerFunctions.embedDiagram();
     },

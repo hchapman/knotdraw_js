@@ -257,6 +257,6 @@ export default class OrthogonalDiagramEmbedding {
     }
 
     orthogonalRep() {
-        console.log(this.orthogonalSpec());
+        return new OrthogonalRep(...this.orthogonalSpec());
     }
 }

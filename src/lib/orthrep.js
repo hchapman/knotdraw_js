@@ -1,5 +1,101 @@
 import DiGraph from "./digraph.js";
 
+function partialSums(L) {
+    let ans = [0];
+    for (let x of L) {
+        ans.push(ans[ans.length-1] + x);
+    }
+    return ans;
+}
+
+function elementMap(part) {
+    let ans = [];
+    for (let p of part) {
+        for (let x of p) {
+            ans[x] = p;
+        }
+    }
+    return ans;
+}
+
+function basicTopologicalNumbering(G) {
+    let inValences = new Map();
+    G.nodes.forEach(
+        (data, v) => inValences.set(v, G.indegree(v)));
+
+    let numbering = [];
+
+    let currSources = [];
+    for (let [v, deg] of inValences) {
+        if (deg == 0) { currSources.push(v); }
+    }
+
+    let currNumber = 0;
+
+    while (inValences.size > 0) {
+        let newSources = [];
+        for (let v of currSources) {
+            inValences.delete(v);
+            numbering[v] = currNumber;
+
+            for (let e of G.outgoing(v)) {
+                let w = e.sink;
+                inValences.set(w, inValences.get(w) - 1);
+                if (inValences.get(w) == 0) {
+                    newSources.push(w);
+                }
+            }
+            currSources = newSources;
+        }
+        currNumber += 1;
+    }
+
+    return numbering;
+}
+
+function topologicalNumbering(G) {
+    let n = basicTopologicalNumbering(G);
+    let success = true;
+
+    while (success) {
+        success = false;
+        for (let [v, d] of G.nodes) {
+            let below = G.incoming(v).filter(e => e.dummy == false).length;
+            let above = G.outgoing(v).filter(e => e.dummy == false).length;
+
+            if (above != below) {
+                let newPos;
+                if (above > below) {
+                    newPos = Math.min(...G.outgoing(v).map(e => n[e.sink])) - 1;
+                } else {
+                    newPos = Math.max(...G.incoming(v).map(e => n[e.source])) + 1;
+                }
+
+                if (newPos != n[v]) {
+                    n[v] = newPos;
+                    success = true;
+                }
+            }
+        }
+    }
+
+    return n;
+}
+
+function kittyCorner(turns) {
+    let rotations = partialSums(turns);
+    let reflexCorners = turns.filter(t => t == -1).map((t, i) => i);
+
+    for (let r0 of reflexCorners) {
+        for (let r1 of reflexCorners.filter(r => r > r0)) {
+            if (rotations[r1] - rotations[r0] == 2) {
+                return [r0, r1];
+            }
+        }
+    }
+    return null;
+}
+
 class OrthogonalFace {
     constructor(graph, edgeAndVert) {
         let [edge, vertex] = edgeAndVert;
@@ -29,14 +125,75 @@ class OrthogonalFace {
             if (e0.kind == e1.kind) {
                 this.turns.push(0);
             } else {
-                let t = (e0.tail == v0) ^ (e1.head == v0) ^ (e0.kind == 'horizontal');
+                let t = (e0.source == v0) ^ (e1.sink == v0) ^ (e0.kind == 'horizontal');
                 this.turns.push(t ? -1 : 1);
             }
         }
 
         let rotation = this.turns.reduce((s, x) => s+x);
         console.assert( Math.abs(rotation) == 4, rotation );
-        this.exterior = (rotation == -4);
+        this.exterior = (rotation == 4);
+    }
+
+    kittyCorner() {
+        if (!this.exterior) {
+            return kittyCorner(this.turns);
+        }
+        return null;
+    }
+
+    isTurnRegular() {
+        return this.kittyCorner() === null;
+    }
+
+    switches(swap) {
+        function edgeToEndpoints(e) {
+            if (swap && e.kind == 'horizontal') {
+                return [e.sink, e.source];
+            }
+            return [e.source, e.sink];
+        }
+
+        let ans = [];
+        for (let i = 0; i < this.evPairs.length; i++) {
+            let [e0, v0] = this.evPairs[i];
+            let [t0, h0] = edgeToEndpoints(e0);
+            let [t1, h1] = edgeToEndpoints(this.evPairs[(i+1)%this.evPairs.length][0]);
+
+            if (t0 == t1 && t1 == v0) {
+                ans.push({index: i, kind: 'source', turn: this.turns[i]});
+            } else if (h0 == h1 && h1 == v0) {
+                ans.push({index: i, kind: 'sink', turn: this.turns[i]});
+            }
+        }
+
+        return ans;
+    }
+
+    saturationEdges(swap) {
+        function saturateFace(faceInfo) {
+            for (let i = 0; i < faceInfo.length; i++) {
+                if (faceInfo[i].turn == -1) {
+                    faceInfo = faceInfo.slice(i).concat(faceInfo.slice(0, i));
+                    break;
+                }
+            }
+
+            for (let i = 0; i < faceInfo.length-2; i++) {
+                let [x, y, z] = faceInfo.slice(i, i+3);
+                if (x.turn == -1 && y.turn == z.turn && z.turn == 1) {
+                    let [a, b] = x.kind == 'sink' ? [x, z] : [z, x];
+                    let remaining = faceInfo.slice(0, i)
+                        .concat([{index: z.index, kind: z.kind, turn: 1}])
+                        .concat(faceInfo.slice(i+3));
+                    return [[a.index, b.index]].concat(saturateFace(remaining));
+                }
+            }
+            return [];
+        }
+
+        let newEdges = saturateFace(this.switches(swap));
+        return newEdges.map(([a,b]) => [this.evPairs[a][1], this.evPairs[b][1]]);
     }
 }
 
@@ -69,23 +226,39 @@ export default class OrthogonalRep {
             unseen.get(edge.index).delete(vert);
             if (unseen.get(edge.index).size <= 0) { unseen.delete(edge.index); }
 
-            let face = OrthogonalFace(this, es);
+            let face = new OrthogonalFace(this, [edge, vert]);
             face.evPairs.forEach(
                 x => {
                     let [edge, vert] = x;
-                    unseen.get(edge.index).delete(vert);
-                    if (unseen.get(edge.index).size <= 0) {
-                        unseen.delete(edge.index);
+                    if (unseen.has(edge.index)) {
+                        unseen.get(edge.index).delete(vert);
+                        if (unseen.get(edge.index).size <= 0) {
+                            unseen.delete(edge.index);
+                        }
                     }
                 });
             this.faces.push(face);
         }
     }
 
+    link(vert) {
+        let link = this.graph.incidentEdges(vert);
+        function score(e) {
+            return (e.source == vert)*2 + (e.kind == 'vertical');
+        }
+        link.sort((a, b) => score(a) < score(b));
+        return link;
+    }
+
+    nextEdgeAtVertex(edge, vert) {
+        let link = this.link(vert);
+        return link[ (link.indexOf(edge)+1) % link.length ];
+    }
+
     makeTurnRegular() {
         let dummy = new Set();
-        let regular = self.faces.filter(F => F.isTurnRegular());
-        let irregular = self.faces.filter(F => !F.isTurnRegular());
+        let regular = this.faces.filter(F => F.isTurnRegular());
+        let irregular = this.faces.filter(F => !F.isTurnRegular());
 
         let i = 0;
         while (irregular.length > 0) {
@@ -117,22 +290,59 @@ export default class OrthogonalRep {
         [this.faces, this.dummy] = [regular, dummy];
     }
 
-    DagFromDirection(kind) {
+    saturationEdges(swap) {
+        return this.faces.reduce(
+            (arr, f) => arr.concat(f.saturationEdges(swap)), []);
+    }
+
+    dagFromDirection(kind) {
         let H = new DiGraph();
         this.graph.nodes.forEach((data, v) =>
                                  H.addNode(v));
         for (let [source, sink, data] of this.graph.edgeGen()) {
-            
+            if (data.kind == kind) { H.addEdge(source, sink); }
         }
+
+        let maximalChains = H.weakComponents();
+        let vertexToChain = elementMap(maximalChains);
+
+        let D = new DiGraph();
+        maximalChains.forEach((c, i) => D.addNode(c));
+
+        for (let [source, sink, data] of this.graph.edgeGen()) {
+            if (data.kind != kind) {
+                let d = D.addEdge(vertexToChain[source], vertexToChain[sink]);
+                d.dummy = (this.dummy.has(data));
+            }
+        }
+
+        for (let [u, v] of this.saturationEdges(false)) {
+            let d = D.addEdge(vertexToChain[u], vertexToChain[v]);
+            d.dummy = true;
+        }
+        for (let [u, v] of this.saturationEdges(true)) {
+            if (kind == 'vertical') {
+                let t = u;
+                u = v;
+                v = t;
+            }
+
+            let d = D.addEdge(vertexToChain[u], vertexToChain[v]);
+            d.dummy = true;
+        }
+
+        D.vertexToChain = vertexToChain;
+        return D;
     }
 
     chainCoordinates(kind) {
-        let D = this.DagFromDirection(kind);
+        let D = this.dagFromDirection(kind);
         let chainCoords = topologicalNumbering(D);
 
         let coords = new Map();
         this.graph.nodes.forEach((data, v) =>
-                                 coords.set(v, chainCoords[D.vertexToChain(v)]));
+                                 coords.set(v, chainCoords[D.vertexToChain[v]]));
+        return coords;
     }
 
     basicGridEmbedding() {
@@ -140,7 +350,7 @@ export default class OrthogonalRep {
         let H = this.chainCoordinates('vertical');
 
         let emb = new Map();
-        this.graph.nodes.forEach((data, v) => emb.set(v, [H[v], V[v]]));
+        this.graph.nodes.forEach((data, v) => emb.set(v, [H.get(v), V.get(v)]));
         return emb;
     }
 }
