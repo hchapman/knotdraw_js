@@ -1146,12 +1146,13 @@ function sleep(millis)
 }
 
 self.randomDiagram = Module.cwrap('randomDiagram', 'number',
-                                  ['number', 'number', 'number', 'number', 'number']);
+                                  ['number', 'number', 'number', 'number', 'number', 'number']);
 
 function randomDiagram(n_verts, n_comps, max_att, type) {
     let vertPtr = Module._malloc(4);
 
-    let nVerts = self.randomDiagram(10, 1, 50, 0, vertPtr);
+    let nVerts = self.randomDiagram(n_verts, n_comps, max_att, type,
+                                    Math.random()*2**32, vertPtr);
     let vertArray = Module.getValue(vertPtr, "i32*");
 
     let view = Module.HEAP32.subarray(vertArray/4, vertArray/4+(4*nVerts));
@@ -1172,6 +1173,11 @@ function randomDiagram(n_verts, n_comps, max_att, type) {
 }
 
 var workerFunctions = {
+    setRandomLinkDiagram: function(n_verts, n_comps, max_att, type) {
+        let sigma = randomDiagram(n_verts, n_comps, max_att, type);
+        workerFunctions.setLinkDiagram(sigma);
+    },
+
     setLinkDiagram: function(sigma, crossBend) {
         self.shadow = new __WEBPACK_IMPORTED_MODULE_0__lib_shadow_js__["a" /* default */](sigma);
         self.orthShadow = new __WEBPACK_IMPORTED_MODULE_1__lib_orthemb_js__["a" /* default */](self.shadow);
@@ -1204,8 +1210,6 @@ var workerFunctions = {
             arguments: [self.force_shadow]
         });
 
-        return;
-
         workerFunctions.embedDiagram();
     },
 
@@ -1215,7 +1219,7 @@ var workerFunctions = {
         let thresh = 5e-10;
 
         let curDate;
-        let n_steps = 0;
+        let n_steps = 50;
 
         for (let i = 0; i < n_steps; i++) {
             let procStart = Date.now();
