@@ -40,11 +40,12 @@ body {
 }
 
 .face {
-    fill: lightgray;
+    fill: teal;
+    fill-opacity: .1;
 }
 
 .face:hover {
-    /*fill: green;*/
+    fill-opacity: .5;
 }
 
 .knot {
@@ -53,7 +54,6 @@ body {
     stroke-width:1px;
     vector-effect: non-scaling-stroke;
 }
-
 
 .knot:hover {
     stroke: teal;

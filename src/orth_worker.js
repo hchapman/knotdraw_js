@@ -107,9 +107,6 @@ class ForceLinkDiagram {
         let edges = [];
         for (let face of this.faces) {
             if (face.includes(ui)) {
-                if (ui == 63) {
-                    console.log(face);
-                }
                 for (let i = 0; i < face.length-1; i++) {
                     console.assert(this.edges.filter(
                         e => ((e[0] == face[i] && e[1] == face[i+1]) ||
@@ -485,9 +482,9 @@ var workerFunctions = {
         self.orthShadow = new OrthogonalDiagramEmbedding(self.shadow);
 
         let rep = self.orthShadow.orthogonalRep();
-        console.log(rep);
+
         let spec = self.orthShadow.orthogonalSpec();
-        console.log(spec);
+
         let gridEmb = rep.basicGridEmbedding();
 
         let verts = [];
@@ -501,11 +498,13 @@ var workerFunctions = {
         let faces = rep.faces.map(f => f.evPairs.map(ev => ev[1]));
         //faces.forEach(f => f.reverse());
 
-        console.log(verts);
-        console.log(edges);
-        console.log(faces);
-
         self.force_shadow = new ForceLinkDiagram(verts, edges, faces);
+        self.faces = self.orthShadow.faces.map(f => {
+            let face = f.arcs.map(a => a.vert);
+            face.exterior = f.exterior;
+            return face;
+        });
+        console.log(faces);
         self.components = self.orthShadow.components.map(c => c.map(a => a.vert));
 
         postMessage({
@@ -543,7 +542,7 @@ var workerFunctions = {
 
         postMessage({
             function: "finalizeLinkDiagram",
-            arguments: [self.force_shadow, self.components]
+            arguments: [self.force_shadow, self.faces, self.components]
         });
     }
 }

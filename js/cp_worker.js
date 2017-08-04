@@ -814,7 +814,7 @@ class ForceLinkDiagram {
         for (let face of this.faces) {
             if (face.includes(ui)) {
                 if (ui == 63) {
-                    console.log(face);
+                    //console.log(face);
                 }
                 for (let i = 0; i < face.length-1; i++) {
                     console.assert(this.edges.filter(
@@ -1506,7 +1506,7 @@ var workerFunctions = {
         }
 
         embedding[0] = mul(10/mind , embedding[0]);
-        console.log("minD: ", mind);
+        //console.log("minD: ", mind);
 
         pts = embedding[0];
         //console.log(pts);
@@ -1530,7 +1530,7 @@ var workerFunctions = {
             }
         }
 
-        console.log("minD: ", mind);
+        //console.log("minD: ", mind);
 
         // Create an embedded graph without scaffolding
         let l_verts = [];
@@ -1586,9 +1586,6 @@ var workerFunctions = {
             //do { curDate = Date.now(); }
             //while( curDate-procStart < 50);
         }
-
-        console.log("Surr 56");
-        console.log(self.force_shadow.surr_edges[56]);
 
         postMessage({
             function: "setLinkDiagram",

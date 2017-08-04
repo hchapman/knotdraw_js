@@ -305,13 +305,13 @@ class MeshDraw {
         }
     }
 
-    finalize_link_diagram(ld, components) {
+    finalize_link_diagram(ld, faces, components) {
         let min_radii = [];
         for (let ai in ld.verts) {
             let a = ld.verts[ai];
             min_radii[ai] = Math.min(...ld.verts.map(
                 (b, bi) => bi == ai ? Infinity : norm(sub(a, b))))/2;
-            console.log(min_radii[ai]);
+            
             let t = this.nodeG.circle(a[0], a[1], min_radii[ai]);
             t.addClass("plnode");
         }
@@ -319,11 +319,11 @@ class MeshDraw {
         for (let ci = 0; ci < components.length; ci++) {
             let component = components[ci];
             let cmp = [component[component.length-1]].concat(component).concat([component[0]]);
-            console.log(cmp);
+            
             let laststop, firststart;
             for (let i = 0; i < cmp.length-2; i++) {
                 let bend = cmp.slice(i, i+3);
-                console.log(i, bend, bend.map(j => ld.verts[j]));
+                
 
                 // Pretty, but inaccurate
                 // let start = mul(.5, add(ld.verts[bend[0]], ld.verts[bend[1]]));
@@ -354,6 +354,38 @@ class MeshDraw {
             this.knotG.path("M"+laststop+"L"+firststart)
                 .addClass("knot")
                 .addClass("q"+(ci%9)+"-9");
+        }
+
+        for (let fi = 0; fi < faces.length; fi++) {
+            let face = faces[fi];
+            let cmp = [face[face.length-1]].concat(face).concat([face[0]]);
+
+            if (face.exterior) {
+                continue;
+            }
+
+            let laststop, firststart;
+            let pathStr;
+            for (let i = 0; i < cmp.length-2; i++) {
+                let bend = cmp.slice(i, i+3);
+
+                let dstart = sub(ld.verts[bend[0]], ld.verts[bend[1]]);
+                let start = add(ld.verts[bend[1]],
+                                mul(min_radii[bend[1]]/norm(dstart), dstart));
+                if (firststart == undefined) {
+                    firststart = start;
+                    pathStr = "M"+start;
+                }
+                let ctrl = ld.verts[bend[1]];
+                let dstop = sub(ld.verts[bend[2]], ld.verts[bend[1]]);
+                let stop = add(ld.verts[bend[1]],
+                               mul(min_radii[bend[1]]/norm(dstop), dstop));
+                pathStr += "L"+start+"Q"+ctrl+" "+stop;
+                laststop = stop;
+            }
+            //console.log(pathStr);
+            this.nodeG.path(pathStr)
+                .addClass("face");
         }
     }
 
@@ -656,9 +688,9 @@ var cpWorkerFunctions = {
         meshDraw.set_link_diagram(link_diagram);
     },
 
-    finalizeLinkDiagram: function(link_diagram, components) {
+    finalizeLinkDiagram: function(link_diagram, faces, components) {
         meshDraw.set_link_diagram(link_diagram);
-        meshDraw.finalize_link_diagram(link_diagram, components);
+        meshDraw.finalize_link_diagram(link_diagram, faces, components);
     }
 }
 
@@ -724,7 +756,7 @@ document.getElementById("map_submit").onclick = function(ev) {
 document.getElementById("map_random").onclick = function(ev) {
     try {
         meshDraw.clear();
-        drawRandomMapAsync(20, 1, 50, 1);
+        drawRandomMapAsync(20, 1, 50, 0);
     } catch(err) {
         document.querySelector(ev.target.dataset.errbox).textContent = "Error";
         console.log("Error:", err);

@@ -133,13 +133,11 @@ export default class OrthogonalDiagramEmbedding {
             }
         }
 
-        console.log(G);
         return G;
     }
 
     bend() {
         let flow = this.faceNetwork.minCostFlow()[1];
-        console.log(flow);
 
         for (let [a, flows] of flow) {
             for (let [b, w_a] of flows) {
@@ -151,7 +149,6 @@ export default class OrthogonalDiagramEmbedding {
                 let w_b = flow.get(b).get(a);
 
                 let [A, B] = [this.faces[a], this.faces[b]];
-                console.log(a, b, A, B);
                 let [arc_ai, arc_bi] = A.edgeOfIntersection(B);
 
                 let arc_a = this.shadow.arcs[arc_ai];
