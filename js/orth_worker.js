@@ -1150,6 +1150,12 @@ function randomDiagram(n_verts, n_comps, max_att, type) {
 
     let nVerts = self.randomDiagram(n_verts, n_comps, max_att, type,
                                     Math.random()*2**32, vertPtr);
+    if (nVerts == 0) {
+        // No diagram was successfully sampled
+        Module._free(vertPtr);
+        return null;
+    }
+
     let vertArray = Module.getValue(vertPtr, "i32*");
 
     let view = Module.HEAP32.subarray(vertArray/4, vertArray/4+(4*nVerts));
@@ -1172,6 +1178,14 @@ function randomDiagram(n_verts, n_comps, max_att, type) {
 var workerFunctions = {
     setRandomLinkDiagram: function(n_verts, n_comps, max_att, type) {
         let sigma = randomDiagram(n_verts, n_comps, max_att, type);
+        if (sigma == null) {
+            postMessage({
+                function: "raiseError",
+                arguments: ["A diagram was not sampled successfully"]
+            });
+            return;
+        }
+
         postMessage({
             function: "updatePDCode",
             arguments: ["["+sigma.map(v => "["+v+"]")+"]"]

@@ -628,6 +628,10 @@ var cpWorkerFunctions = {
     finalizeLinkDiagram: function(link_diagram, faces, components) {
         meshDraw.set_link_diagram(link_diagram);
         meshDraw.finalize_link_diagram(link_diagram, faces, components);
+    },
+
+    raiseError: function(msg) {
+        document.getElementById("map_errbox").textContent = msg;
     }
 }
 
