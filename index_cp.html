@@ -10,17 +10,15 @@
   <div id="options", style="width: 100%;">
       <label>Knot to draw: &sigma; = <input type="text" style="width: 70%;" id="map_input"></label>
       <button id="map_submit" data-target="#map_input" data-errbox="#map_errbox">Draw</button>
-      <button id="map_random" data-errbox="#map_errbox">Random!</button>
       <span id="map_errbox"></span>
   </div>
   <div id="container">
       <svg id="knot-draw" viewBox="-100 -100 200 200">
       </svg>
   </div>
-  <script src="js/lodash.min.js"></script>
-  <script src='node_modules/snapsvg/dist/snap.svg-min.js'></script>
+  <script src='https://cdnjs.cloudflare.com/ajax/libs/snap.svg/0.5.1/snap.svg-min.js'></script>
   <script src='js/lalolib/lalolib.js'></script>
 
-  <script src="js/orthogonal.js"></script>
+  <script src="js/index.js"></script>
 </body>
 </html>
