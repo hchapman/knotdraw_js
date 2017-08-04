@@ -84,7 +84,8 @@ function topologicalNumbering(G) {
 
 function kittyCorner(turns) {
     let rotations = partialSums(turns);
-    let reflexCorners = turns.filter(t => t == -1).map((t, i) => i);
+    //let reflexCorners = turns.filter(t => t == -1).map((t, i) => i);
+    let reflexCorners = turns.map((t, i) => i).filter(i => turns[i] == -1);
 
     for (let r0 of reflexCorners) {
         for (let r1 of reflexCorners.filter(r => r > r0)) {
@@ -132,7 +133,7 @@ class OrthogonalFace {
 
         let rotation = this.turns.reduce((s, x) => s+x);
         console.assert( Math.abs(rotation) == 4, rotation );
-        this.exterior = (rotation == 4);
+        this.exterior = (rotation == -4);
     }
 
     kittyCorner() {
@@ -246,7 +247,7 @@ export default class OrthogonalRep {
         function score(e) {
             return (e.source == vert)*2 + (e.kind == 'vertical');
         }
-        link.sort((a, b) => score(a) < score(b));
+        link.sort((a, b) => score(a) > score(b));
         return link;
     }
 
@@ -260,13 +261,13 @@ export default class OrthogonalRep {
         let regular = this.faces.filter(F => F.isTurnRegular());
         let irregular = this.faces.filter(F => !F.isTurnRegular());
 
-        let i = 0;
+        let ell = 0;
         while (irregular.length > 0) {
             let F = irregular.pop();
             let [i, j] = F.kittyCorner();
             let [v0, v1] = [F.evPairs[i][1], F.evPairs[j][1]];
 
-            let kind = ['vertical', 'horizontal'][i%2];
+            let kind = ['vertical', 'horizontal'][ell%2];
             let e;
             if (this.graph.incoming(v0).some(e => e.kind == kind)) {
                 e = this.graph.addEdge(v0, v1, {kind: kind, index: this.nedges++});
@@ -276,7 +277,7 @@ export default class OrthogonalRep {
             dummy.add(e);
 
             for (let v of [v0, v1]) {
-                F = OrthogonalFace(this, (e, v));
+                F = new OrthogonalFace(this, [e, v]);
                 if (F.isTurnRegular()) {
                     regular.push(F);
                 } else {
@@ -284,7 +285,7 @@ export default class OrthogonalRep {
                 }
             }
 
-            i++;
+            ell++;
         }
 
         [this.faces, this.dummy] = [regular, dummy];

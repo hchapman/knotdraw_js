@@ -349,7 +349,7 @@ export default class DiGraph {
                             if (vuEdge.flow === undefined) {
                                 vuEdge.flow = eps;
                             } else {
-                                vuEdge.flow += eps;
+                                vuEdge.flow -= eps;
                             }
                         }
                     }

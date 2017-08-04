@@ -517,7 +517,7 @@ var workerFunctions = {
         let thresh = 5e-10;
 
         let curDate;
-        let n_steps = 50;
+        let n_steps = 0;
 
         for (let i = 0; i < n_steps; i++) {
             let procStart = Date.now();
