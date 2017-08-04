@@ -1,26 +1,38 @@
 <!DOCTYPE html>
 <html >
-<head>
-  <meta charset="UTF-8">
-  <title>KnotDraw</title>
-      <link rel="stylesheet" href="css/style.css">
-</head>
+  <head>
+    <meta charset="UTF-8">
+    <title>KnotDraw</title>
+    <link rel="stylesheet" href="css/style.css">
+  </head>
 
-<body>
-  <div id="options", style="width: 100%;">
-      <label>Knot to draw: &sigma; = <input type="text" style="width: 70%;" id="map_input"></label>
-      <button id="map_submit" data-target="#map_input" data-errbox="#map_errbox">Draw</button>
-      <button id="map_random" data-errbox="#map_errbox">Random!</button>
-      <span id="map_errbox"></span>
-  </div>
-  <div id="container">
+  <body>
+    <header>
+      <div id="options", style="width: 100%;">
+        <label>Knot to draw: &sigma; = <input type="text" style="width: 70%;" id="map_input"></label>
+        <button id="map_submit" data-target="#map_input" data-errbox="#map_errbox">Draw</button>
+        <button id="map_random" data-errbox="#map_errbox">Random!</button>
+        <span id="map_errbox"></span><br>
+        <div id="random-settings", style="width: 100%">
+          <label># crossings <input type="number" id="random-ncross" value="20" min="1" max="300"></label>
+          <label># components <input type="number" id="random-ncomps" value="0" min="0" max="300"></label>
+          <label>type <select id="random-type">
+            <option selected value="0">Any</option>
+            <option value="1">Prime</option>
+            <option value="2">6-connected</option>
+            <option value="3">Biquartic</option>
+          </select></label>
+        </div>
+      </div>
+    </header>
+    <div id="container">
       <svg id="knot-draw" viewBox="-100 -100 200 200">
       </svg>
-  </div>
-  <script src="js/lodash.min.js"></script>
-  <script src='https://cdnjs.cloudflare.com/ajax/libs/snap.svg/0.5.1/snap.svg-min.js'></script>
-  <script src='js/lalolib/lalolib.js'></script>
+    </div>
+    <script src="js/lodash.min.js"></script>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/snap.svg/0.5.1/snap.svg-min.js'></script>
+    <script src='js/lalolib/lalolib.js'></script>
 
-  <script src="js/orthogonal.js"></script>
-</body>
+    <script src="js/orthogonal.js"></script>
+  </body>
 </html>

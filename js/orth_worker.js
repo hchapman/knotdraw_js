@@ -1004,36 +1004,36 @@ class ForceLinkDiagram {
                     let ell = (i+4)%8;
                     for (let j = 0; j < MU.length; j++) {
                         if ((i-j+8)%8 == 0) {
-                            MU[j] = min(MU[j], maxR);
+                            MU[j] = Math.min(MU[j], maxR);
                         } else if ((i-j+8)%8 == 1 || (i-j+8)%8 == 2) {
-                            MU[j] = min(MU[j], maxR /
+                            MU[j] = Math.min(MU[j], maxR /
                                          Math.cos(Math.atan2(cv[1], cv[0]) - (j+1)*Math.PI/4));
                         } else if ((i-j+8)%8 == 6 || (i-j+8)%8 == 7) {
-                            MU[j] = min(MU[j], maxR /
+                            MU[j] = Math.min(MU[j], maxR /
                                          Math.cos(Math.atan2(cv[1], cv[0]) - (j)*Math.PI/4));
                         }
                     }
 
                     for (let j = 0; j < MU.length; j++) {
                         if ((ell-j+8)%8 == 0) {
-                            M[ai][j] = min(M[ai][j], maxR);
+                            M[ai][j] = Math.min(M[ai][j], maxR);
                         } else if ((ell-j+8)%8 == 1 || (ell-j+8)%8 == 2) {
-                            M[ai][j] = min(M[ai][j], maxR /
+                            M[ai][j] = Math.min(M[ai][j], maxR /
                                            Math.cos(Math.atan2(-cv[1], -cv[0]) - (j+1)*Math.PI/4));
                         } else if ((ell-j+8)%8 == 6 || (ell-j+8)%8 == 7) {
-                            M[ai][j] = min(M[ai][j], maxR /
+                            M[ai][j] = Math.min(M[ai][j], maxR /
                                            Math.cos(Math.atan2(-cv[1], -cv[0]) - (j)*Math.PI/4));
                         }
                     }
 
                     for (let j = 0; j < MU.length; j++) {
                         if ((ell-j+8)%8 == 0) {
-                            M[bi][j] = min(M[bi][j], maxR);
+                            M[bi][j] = Math.min(M[bi][j], maxR);
                         } else if ((ell-j+8)%8 == 1 || (ell-j+8)%8 == 2) {
-                            M[bi][j] = min(M[bi][j], maxR /
+                            M[bi][j] = Math.min(M[bi][j], maxR /
                                            Math.cos(Math.atan2(-cv[1], -cv[0]) - (j+1)*Math.PI/4));
                         } else if ((ell-j+8)%8 == 6 || (ell-j+8)%8 == 7) {
-                            M[bi][j] = min(M[bi][j], maxR /
+                            M[bi][j] = Math.min(M[bi][j], maxR /
                                            Math.cos(Math.atan2(-cv[1], -cv[0]) - (j)*Math.PI/4));
                         }
                     }
@@ -1085,12 +1085,12 @@ class ForceLinkDiagram {
                     let ell = (i+4)%8;
                     for (let j = 0; j < MU.length; j++) {
                         if ((i-j+8)%8 == 0) {
-                            MU[j] = min(MU[j], maxR);
+                            MU[j] = Math.min(MU[j], maxR);
                         } else if ((i-j+8)%8 == 1 || (i-j+8)%8 == 2) {
-                            MU[j] = min(MU[j], maxR /
+                            MU[j] = Math.min(MU[j], maxR /
                                          Math.cos(Math.atan2(cv[1], cv[0]) - (j+1)*Math.PI/4));
                         } else if ((i-j+8)%8 == 6 || (i-j+8)%8 == 7) {
-                            MU[j] = min(MU[j], maxR /
+                            MU[j] = Math.min(MU[j], maxR /
                                          Math.cos(Math.atan2(cv[1], cv[0]) - (j)*Math.PI/4));
                         }
                     }
@@ -1100,24 +1100,24 @@ class ForceLinkDiagram {
 
                     for (let j = 0; j < MU.length; j++) {
                         if ((ell-j+8)%8 == 0) {
-                            M[ai][j] = min(M[ai][j], maxR);
+                            M[ai][j] = Math.min(M[ai][j], maxR);
                         } else if ((ell-j+8)%8 == 1 || (ell-j+8)%8 == 2) {
-                            M[ai][j] = min(M[ai][j], maxR /
+                            M[ai][j] = Math.min(M[ai][j], maxR /
                                            Math.cos(Math.atan2(-cv[1], -cv[0]) - (j+1)*Math.PI/4));
                         } else if ((ell-j+8)%8 == 6 || (ell-j+8)%8 == 7) {
-                            M[ai][j] = min(M[ai][j], maxR /
+                            M[ai][j] = Math.min(M[ai][j], maxR /
                                            Math.cos(Math.atan2(-cv[1], -cv[0]) - (j)*Math.PI/4));
                         }
                     }
 
                     for (let j = 0; j < MU.length; j++) {
                         if ((ell-j+8)%8 == 0) {
-                            M[bi][j] = min(M[bi][j], maxR);
+                            M[bi][j] = Math.min(M[bi][j], maxR);
                         } else if ((ell-j+8)%8 == 1 || (ell-j+8)%8 == 2) {
-                            M[bi][j] = min(M[bi][j], maxR /
+                            M[bi][j] = Math.min(M[bi][j], maxR /
                                            Math.cos(Math.atan2(-cv[1], -cv[0]) - (j+1)*Math.PI/4));
                         } else if ((ell-j+8)%8 == 6 || (ell-j+8)%8 == 7) {
-                            M[bi][j] = min(M[bi][j], maxR /
+                            M[bi][j] = Math.min(M[bi][j], maxR /
                                            Math.cos(Math.atan2(-cv[1], -cv[0]) - (j)*Math.PI/4));
                         }
                     }
@@ -1172,6 +1172,10 @@ function randomDiagram(n_verts, n_comps, max_att, type) {
 var workerFunctions = {
     setRandomLinkDiagram: function(n_verts, n_comps, max_att, type) {
         let sigma = randomDiagram(n_verts, n_comps, max_att, type);
+        postMessage({
+            function: "updatePDCode",
+            arguments: ["["+sigma.map(v => "["+v+"]")+"]"]
+        });
         workerFunctions.setLinkDiagram(sigma);
     },
 

@@ -25,7 +25,7 @@ int randomDiagram(int n_crossings, int n_components, int max_att, int dia_type, 
   pm_vertex *cur_v;
   int v_idx, e_idx, pos;
 
-  printf("Hello\n");
+  //printf("Hello\n");
 
   size.e = 0;
   size.v = n_crossings;
@@ -68,14 +68,25 @@ int randomDiagram(int n_crossings, int n_components, int max_att, int dia_type, 
   meth.seed = seed;
   meth.verbose = 0;
 
-  printf("%d \n", meth.seed);
+  //printf("%d \n", meth.seed);
 
   pmInitRND(&meth);
   pmSetParameters(&size, &meth);
   pmMemoryInit(&size, &meth, &mem);
   pmExtendMemory(&size, &meth, &mem, 0);
 
-  pmPlanMap(&size, &meth, &mem, &plmap);
+  long numTry = 0;
+  char done = 0;
+  do {
+    pmPlanMap(&size, &meth, &mem, &plmap);
+    done = (n_components <= 0 ? 1 : pmStatGauss(&plmap) == n_components);
+    numTry++;
+  } while (!done && numTry < max_att);
+
+  if (numTry >= max_att && !done) {
+    pmFreeMap(&plmap);
+    return 0;
+  }
 
   *vertData = (int32_t*)malloc(sizeof(int32_t)*plmap.v*4);
 

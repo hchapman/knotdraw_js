@@ -667,7 +667,10 @@ function drawMapAsync(sigma, cross_bend=8) {
     });
 }
 
-function drawRandomMapAsync(n_verts, n_comps, max_att, type) {
+function drawRandomMapAsync(n_verts=20, n_comps=0, max_att=50, type=0) {
+    n_verts = Number.parseInt(document.getElementById("random-ncross").value);
+    n_comps = Number.parseInt(document.getElementById("random-ncomps").value);
+    type = Number.parseInt(document.getElementById("random-type").value);
     cpWorker.postMessage({
         function: "setRandomLinkDiagram",
         arguments: [n_verts, n_comps, max_att, type]
@@ -682,6 +685,10 @@ var cpWorkerFunctions = {
 
     updateEmbedding: function(flat_poly, embedding, m4v, conv) {
         meshDraw.update_embedding(flat_poly, embedding, m4v, conv);
+    },
+
+    updatePDCode: function(pdcode) {
+        document.getElementById("map_input").value = pdcode;
     },
 
     setLinkDiagram: function(link_diagram) {
@@ -752,11 +759,10 @@ document.getElementById("map_submit").onclick = function(ev) {
     }
 };
 
-
 document.getElementById("map_random").onclick = function(ev) {
     try {
         meshDraw.clear();
-        drawRandomMapAsync(20, 1, 50, 0);
+        drawRandomMapAsync(20, 3, 50, 0);
     } catch(err) {
         document.querySelector(ev.target.dataset.errbox).textContent = "Error";
         console.log("Error:", err);
