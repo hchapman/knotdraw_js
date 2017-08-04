@@ -536,6 +536,9 @@ cpWorker.onmessage = function(ev) {
 // Trefoil
 let sigma = [[0, 6, 11, 5], [1, 8, 2, 7], [3, 9, 4, 10]];
 
+// (2,5) torus
+//let sigma = [[0, 10, 19, 9], [1, 12, 2, 11], [3, 13, 4, 14], [5, 16, 6, 15], [7, 17, 8, 18]];
+
 // Twist
 //let sigma = [[0, 1, 3, 2]];
 

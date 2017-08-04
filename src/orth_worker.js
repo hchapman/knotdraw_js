@@ -74,8 +74,14 @@ class ForceLinkDiagram {
         let c = a[1] - m*a[0];
         let d = v[1] - n*v[0];
 
-        let x = (d - c) / (m - n);
-        return [x, m*x + c];
+        if (m == 0) {
+            return [v[0], a[1]];
+        } else if (n == 0) {
+            return [a[0], v[1]];
+        } else {
+            let x = (d - c) / (m - n);
+            return [x, m*x + c];
+        }
     }
 
     veOnEdge(ve, a, b) {
@@ -157,6 +163,7 @@ class ForceLinkDiagram {
 
         let FU = [FUx, FUy];
 
+        MU[i] = Math.max(0, MU[i]);
         let fU = norm(FU);
         let du;
         if (fU <= MU[i]) {
@@ -427,7 +434,6 @@ class ForceLinkDiagram {
 
         //console.log("Fx", FX);
         for (let ui in this.verts) {
-
             this.move(ui, FX[ui], FY[ui], M[ui]);
         }
     }
@@ -487,6 +493,7 @@ var workerFunctions = {
             edges.push([source, sink]);
         }
         let faces = rep.faces.map(f => f.evPairs.map(ev => ev[1]));
+        //faces.forEach(f => f.reverse());
 
         console.log(verts);
         console.log(edges);
@@ -499,6 +506,8 @@ var workerFunctions = {
             arguments: [self.force_shadow]
         });
 
+        return;
+
         workerFunctions.embedDiagram();
     },
 
@@ -506,6 +515,31 @@ var workerFunctions = {
         let tstart = Date.now();
 
         let thresh = 5e-10;
+
+        let curDate;
+        let n_steps = 50;
+
+        for (let i = 0; i < n_steps; i++) {
+            let procStart = Date.now();
+
+            postMessage({
+                function: "setLinkDiagram",
+                arguments: [self.force_shadow]
+            });
+
+            self.force_shadow.update();
+            self.force_shadow.a_exp -= (1 - 0.4)/n_steps;
+            self.force_shadow.re_exp += (4 - 2)/n_steps;
+            self.force_shadow.dbar -= (3*self.force_shadow.delta)/n_steps;
+
+            //do { curDate = Date.now(); }
+            //while( curDate-procStart < 50);
+        }
+
+        postMessage({
+            function: "setLinkDiagram",
+            arguments: [self.force_shadow]
+        });
     }
 }
 
