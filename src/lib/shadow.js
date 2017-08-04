@@ -134,6 +134,9 @@ export default class LinkShadow {
     vertPrev(arc) {
         return this.verts[arc.vert][(arc.vertpos+3)%4];
     }
+    vertOppo(arc) {
+        return this.verts[arc.vert][(arc.vertpos+2)%4];
+    }
 
     newArc(idx) {
         if (idx === undefined) { idx = this.arcs.length; }
@@ -150,6 +153,7 @@ export default class LinkShadow {
             arc.edgeOpposite = this.edgeOpposite(arc);
             arc.vertNext = this.vertNext(arc);
             arc.vertPrev = this.vertPrev(arc);
+            arc.vertOppo = this.vertOppo(arc);
         }
     }
 

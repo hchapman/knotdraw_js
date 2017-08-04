@@ -198,9 +198,11 @@ export default class OrthogonalDiagramEmbedding {
         for (let si = 1; si < strands.length-1; si += 2) {
             strands[si].vertNext = strands[si+1];
             strands[si].vertPrev = strands[si+1];
+            strands[si].vertOppo = strands[si+1];
 
             strands[si+1].vertNext = strands[si];
             strands[si+1].vertPrev = strands[si];
+            strands[si+1].vertOppo = strands[si];
 
             this.shadow.setVert(this.shadow.verts.length,
                                 [strands[si].index, undefined, strands[si+1].index, undefined]);
@@ -210,12 +212,22 @@ export default class OrthogonalDiagramEmbedding {
     repairComponents() {
         this.arcComponentMap = new Map();
         this.orderedArcs = [];
+        this.components = [];
 
         for (let i = 0; i < this.shadow.components.length; i++) {
             for (let arc of this.shadow.components[i]) {
                 this.arcComponentMap.set(arc.index, i);
                 this.orderedArcs.push(arc);
             }
+
+            let comp_root_a = this.shadow.components[i][0];
+            let arc = comp_root_a;
+            let component = [];
+            do {
+                component.push(arc);
+                arc = arc.vertOppo.edgeOpposite;
+            } while (arc.index != comp_root_a.index)
+            this.components.push(component);
         }
     }
 

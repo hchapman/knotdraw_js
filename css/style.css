@@ -35,6 +35,7 @@ body {
 .edge {
     stroke: blue;
     stroke-width:1px;
+    stroke-dasharray: 1,2;
     vector-effect: non-scaling-stroke;
 }
 

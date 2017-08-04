@@ -506,6 +506,7 @@ var workerFunctions = {
         console.log(faces);
 
         self.force_shadow = new ForceLinkDiagram(verts, edges, faces);
+        self.components = self.orthShadow.components.map(c => c.map(a => a.vert));
 
         postMessage({
             function: "setLinkDiagram",
@@ -541,8 +542,8 @@ var workerFunctions = {
         }
 
         postMessage({
-            function: "setLinkDiagram",
-            arguments: [self.force_shadow]
+            function: "finalizeLinkDiagram",
+            arguments: [self.force_shadow, self.components]
         });
     }
 }
