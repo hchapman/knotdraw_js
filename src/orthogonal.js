@@ -250,17 +250,40 @@ class MeshDraw {
             let component = components[ci];
             let cmp = [component[component.length-1]].concat(component).concat([component[0]]);
             console.log(cmp);
+            let laststop, firststart;
             for (let i = 0; i < cmp.length-2; i++) {
                 let bend = cmp.slice(i, i+3);
                 console.log(i, bend, bend.map(j => ld.verts[j]));
-                let start = mul(.5, add(ld.verts[bend[0]], ld.verts[bend[1]]));
+
+                // Pretty, but inaccurate
+                // let start = mul(.5, add(ld.verts[bend[0]], ld.verts[bend[1]]));
+                // let ctrl = ld.verts[bend[1]];
+                // let stop = mul(.5, add(ld.verts[bend[1]], ld.verts[bend[2]]));
+
+                // Accurate, but jaggier
+                
+
+                let dstart = sub(ld.verts[bend[0]], ld.verts[bend[1]]);
+                let start = add(ld.verts[bend[1]],
+                                mul(min_radii[bend[1]]/norm(dstart), dstart));
+                if (firststart == undefined) { firststart = start; }
                 let ctrl = ld.verts[bend[1]];
-                let stop = mul(.5, add(ld.verts[bend[1]], ld.verts[bend[2]]));
-                this.knotG.path("M"+start+"Q"+ctrl+" "+stop)
-                    .addClass("knot")
-                    .addClass("Set1")
+                let dstop = sub(ld.verts[bend[2]], ld.verts[bend[1]]);
+                let stop = add(ld.verts[bend[1]],
+                               mul(min_radii[bend[1]]/norm(dstop), dstop));
+                let p;
+                if (laststop !== undefined) {
+                    p = this.knotG.path("M"+laststop+"L"+start+"Q"+ctrl+" "+stop);
+                } else {
+                    p = this.knotG.path("M"+start+"Q"+ctrl+" "+stop);
+                }
+                p.addClass("knot")
                     .addClass("q"+(ci%9)+"-9");
+                laststop = stop;
             }
+            this.knotG.path("M"+laststop+"L"+firststart)
+                .addClass("knot")
+                .addClass("q"+(ci%9)+"-9");
         }
     }
 
