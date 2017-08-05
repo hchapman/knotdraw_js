@@ -1,157 +1,3 @@
-//let lab = new Lalolab();
-
-function least_squares(X /* : Matrix */, Y /* : Matrix */) /* : least_squares */ {
-    let betaHat = solve(mul(X, transpose(X)), mul(X, Y));
-
-    return betaHat;
-}
-
-class MeshEdge {
-    constructor(parent, start, stop) {
-        this.parent = parent;
-        this.start = start;
-        this.stop = stop;
-
-        this.svg = this.parent.edgeG.line(start.x(), start.y(), stop.x(), stop.y());
-        this.svg.addClass("scaffold");
-    }
-
-    set_nodes(start, end, anim_ms=0) {
-        if (anim_ms == 0) {
-            this.svg.attr({'x1': start.x(), 'y1': start.y(), 'x2': end.x(), 'y2': end.y()});
-        } else {
-            this.svg.animate({'x1': start.x(), 'y1': start.y(), 'x2': end.x(), 'y2': end.y()},
-                             anim_ms);
-        }
-    }
-}
-
-class MeshNode {
-    constructor(parent, x, y) {
-        this.parent = parent;
-        this.svg = this.parent.nodeG.circle(x, y, .3);
-        this._x = x;
-        this._y = y;
-        this.svg.addClass('plnode');
-
-        this.svg.node.addEventListener('click', this.onClick.bind(this));
-    }
-
-    set_obj(i, obj) {
-        this.i = i;
-        this.obj = obj;
-    }
-
-    move(x, y, new_r=undefined, anim_ms=0) {
-        this._x = x;
-        this._y = y;
-        if (anim_ms == 0) {
-            // Do not animate
-            this.svg.attr({'cx': x, 'cy': y, 'r': new_r});
-        } else {
-            // Animate the motion
-            this.svg.animate({'cx': x, 'cy': y, 'r': new_r},
-                             anim_ms);
-        }
-    }
-
-    set_r(r, anim_ms=0) {
-        if (anim_ms == 0) {
-            this.svg.attr({'r': r});
-        } else {
-            this.svg.animate({'r': r},
-                             anim_ms);
-        }
-    }
-
-    cur_x() {
-        return this.svg.attr('cx');
-    }
-    x() {
-        return this._x;
-    }
-
-    cur_y() {
-        return this.svg.attr('cy');
-    }
-    y() {
-        return this._y;
-    }
-
-    onClick(e) {
-        //console.log(this);
-        //console.log(this.obj);
-        if (this.obj.length == 2) {
-            this.parent.delete_face(this.i);
-        }
-    }
-
-}
-
-class CompEdgeNode {
-    constructor(parent, x, y, r) {
-        this.parent = parent;
-        this.svg = this.parent.knotG.circle(x, y, r);
-        this._x = x;
-        this._y = y;
-        this._r = r;
-
-        this.svg.node.addEventListener('click', this.onClick.bind(this));
-
-        this.dragging = false;
-    }
-
-    set_obj(i, obj) {
-        this.i = i;
-        this.obj = obj;
-    }
-
-    move(x, y, r, anim_ms=0) {
-        this._x = x;
-        this._y = y;
-        this._r = r;
-        if (anim_ms == 0) {
-            // Do not animate
-            this.svg.attr({'cx': x, 'cy': y, 'r': r});
-        } else {
-            // Animate the motion
-            this.svg.animate({'cx': x, 'cy': y, 'r': r},
-                             anim_ms);
-        }
-    }
-
-    set_r(r, anim_ms=0) {
-        if (anim_ms == 0) {
-            this.svg.attr({'r': r});
-        } else {
-            this.svg.animate({'r': r},
-                             anim_ms);
-        }
-    }
-
-    cur_x() {
-        return this.svg.attr('cx');
-    }
-    x() {
-        return this._x;
-    }
-
-    cur_y() {
-        return this.svg.attr('cy');
-    }
-    y() {
-        return this._y;
-    }
-
-    onClick(e) {
-        //console.log(this);
-        //console.log(this.obj);
-        if (this.obj.length == 2) {
-            this.parent.delete_face(this.i);
-        }
-    }
-}
-
 class MeshDraw {
     constructor(div) {
         this.nodes = [];
@@ -159,19 +5,12 @@ class MeshDraw {
         this.comp_edgenodes = [];
         this.comps = [];
 
-        this.anim_ms = 1000;
-        /*this.pan = svgPanZoom(div, {
-            minZoom: 0.1,
-            maxZoom: 50,
-            contain: true,
-            controlIconsEnabled: true,
-            zoomScaleSensitivity: 1
-        });
-
-        this.draw = Snap(document.querySelector(div).children[0]);*/
         this.draw = Snap(div);
+
         this.edgeG = this.draw.g();
         this.nodeG = this.draw.g();
+        this.faceG = this.draw.g();
+        this.faceG.addClass("YlGnBu");
         this.knotG = this.draw.g();
         this.knotG.addClass("Set1");
     }
@@ -180,9 +19,11 @@ class MeshDraw {
         this.nodes = [];
         this.edges = {};
         this.comps = [];
+        this.comp_edgenodes = [];
 
         this.edgeG.clear();
         this.nodeG.clear();
+        this.faceG.clear();
         this.knotG.clear();
     }
 
@@ -246,22 +87,19 @@ class MeshDraw {
             t.addClass("plnode");
         }
 
+        let vertPaths = [];
         for (let ci = 0; ci < components.length; ci++) {
             let component = components[ci];
             let cmp = [component[component.length-1]].concat(component).concat([component[0]]);
-            
             let laststop, firststart;
             for (let i = 0; i < cmp.length-2; i++) {
                 let bend = cmp.slice(i, i+3);
-                
-
                 // Pretty, but inaccurate
                 // let start = mul(.5, add(ld.verts[bend[0]], ld.verts[bend[1]]));
                 // let ctrl = ld.verts[bend[1]];
                 // let stop = mul(.5, add(ld.verts[bend[1]], ld.verts[bend[2]]));
 
                 // Accurate, but jaggier
-                
 
                 let dstart = sub(ld.verts[bend[0]], ld.verts[bend[1]]);
                 let start = add(ld.verts[bend[1]],
@@ -271,14 +109,25 @@ class MeshDraw {
                 let dstop = sub(ld.verts[bend[2]], ld.verts[bend[1]]);
                 let stop = add(ld.verts[bend[1]],
                                mul(min_radii[bend[1]]/norm(dstop), dstop));
-                let p;
+                let p, pStr;
                 if (laststop !== undefined) {
-                    p = this.knotG.path("M"+laststop+"L"+start+"Q"+ctrl+" "+stop);
+                    //pStr = "M"+laststop+"L"+start+"Q"+ctrl+" "+stop;
+                    pStr = "M"+start+"C"+ctrl+ctrl+" "+stop;
                 } else {
-                    p = this.knotG.path("M"+start+"Q"+ctrl+" "+stop);
+                    pStr = "M"+start+"C"+ctrl+ctrl+" "+stop;
                 }
+                p = this.knotG.path(pStr);
                 p.addClass("knot")
                     .addClass("q"+(ci%9)+"-9");
+
+                if (vertPaths[bend[1]] === undefined) {
+                    vertPaths[bend[1]] = [p];
+                } else {
+                    console.log(p);
+                    console.log(vertPaths[bend[1]][0]);
+                    console.log(Snap.path.intersection(p, vertPaths[bend[1]][0]));
+                }
+
                 laststop = stop;
             }
             this.knotG.path("M"+laststop+"L"+firststart)
@@ -314,277 +163,12 @@ class MeshDraw {
                 laststop = stop;
             }
             //console.log(pathStr);
-            this.nodeG.path(pathStr)
-                .addClass("face");
+            this.faceG.path(pathStr)
+                .addClass("face")
+                .addClass("q"+(face.degree-1)+"-9");
         }
-    }
-
-    set_embedding(g /*metric*/, embedding, map4v /*original map*/, conv) {
-        let points = embedding[0];
-        let faces = embedding[1];
-        let phi = embedding[2];
-        /* set the embedding */
-        this.g = g;
-        this.map4v = map4v;
-
-        // alter the viewbox to fit
-        let min_x = min(get(points, range(), 0));
-        let min_y = min(get(points, range(), 1));
-        let max_x = max(get(points, range(), 0));
-        let max_y = max(get(points, range(), 1));
-
-        let wid = max_x-min_x;
-        let hgt = max_y-min_y;
-
-        let dx = wid*0.05;
-        let dy = hgt*0.05;
-
-        this.draw.attr({viewBox: [min_x-dx, min_y-dy, wid+2*dx, hgt+2*dy].join(",")});
-
-        //console.log(points);
-        for (let i = 0; i < points.m; i++) {
-            let node = this.add_node(i, points.val[i*points.n], points.val[i*points.n+1]);
-            node.set_r(this.g.gamma[this.nodes.length-1]);
-        }
-
-        for (let comp of conv.comps) {
-            for (let pi = 0; pi < comp.length; pi++) {
-                let edge = [comp[pi], comp[(pi+1)%comp.length]];
-                //console.log(edge);
-                if (edge[0] in this.nodes && edge[1] in this.nodes) {
-                    let mesh_edge = this.add_edge(edge[0], edge[1]);
-                    mesh_edge.svg.addClass('edge');
-                }
-            }
-        }
-
-        //console.log(this.map4v.faces);
-        for (let idx in conv.faces) {
-            //console.log(fi);
-            if(conv.faces[idx].length > 0) {
-                let mesh_face = this.add_face(conv.faces[idx][0], parseInt(idx));
-            }
-        }
-
-        let ci = 0;
-        for (let component of conv.comps) {
-            this.comps[ci] = this.add_component(component, map4v, points, conv);
-            this.comps[ci].addClass('q'+ci+"-9");
-            ci += 1;
-        }
-    }
-
-    update_embedding(g /*metric*/, embedding, map4v /*original map*/, conv, anim_ms=0) {
-        let points = embedding[0];
-        let faces = embedding[1];
-        let phi = embedding[2];
-        /* set the embedding */
-        this.g = g;
-        this.map4v = map4v;
-
-        // alter the viewbox to fit
-        let min_x = min(get(points, range(), 0));
-        let min_y = min(get(points, range(), 1));
-        let max_x = max(get(points, range(), 0));
-        let max_y = max(get(points, range(), 1));
-
-        let wid = max_x-min_x;
-        let hgt = max_y-min_y;
-
-        let dx = wid*0.05;
-        let dy = hgt*0.05;
-
-        Snap.animate(this.draw.attr("viewBox").vb.split(" "),
-                     [min_x-dx, min_y-dy, wid+2*dx, hgt+2*dy],
-                     (v) => { this.draw.attr("viewBox", v.join(" ")); },
-                     this.anim_ms);
-
-        //console.log(points);
-        for (let i = 0; i < points.m; i++) {
-            let node = this.nodes[i];
-            node.move(points.val[i*points.n], points.val[i*points.n+1],
-                      this.g.gamma[i], this.anim_ms);
-        }
-
-        for (let comp of conv.comps) {
-            for (let pi = 0; pi < comp.length; pi++) {
-                let edge = [comp[pi], comp[(pi+1)%comp.length]];
-                //console.log(edge);
-                if (edge[0] in this.nodes && edge[1] in this.nodes) {
-                    this.update_edge(edge[0], edge[1]);
-                }
-            }
-        }
-
-        let ci = 0;
-        for (let component of conv.comps) {
-            this.update_component(ci, component, map4v, points, conv);
-            ci += 1;
-        }
-    }
-
-    delete_face(i) {
-        /* Deleting a face (valid curve-preserving faces to delete are a bigon *
-         * or a monogon) is something of an ordeal: We want to delete only the
-         * local triangles which the face affects, modifying the underlying
-         * triangulation only locally, so that we can keep the old discrete
-         * riemannian metric, hopefully so that the resulting embedding looks
-         * very similar. Is there a proof that this will happen? */
-    }
-
-    add_node(i, x, y) {
-        let node = new MeshNode(this, x, y);
-        this.nodes[i] = node;
-        return node;
-    }
-
-    add_edge(i, j) {
-        let edge = new MeshEdge(this, this.nodes[i], this.nodes[j]);
-        this.edges[[i,j]] = edge;
-        this.edges[[j,i]] = edge;
-        return edge;
-    }
-
-    update_edge(i, j) {
-        this.edges[[i,j]].set_nodes(this.nodes[i], this.nodes[j], this.anim_ms);
-    }
-
-
-    add_face(i, fi) {
-        let face_node = this.nodes[i];
-        face_node.svg.addClass("face");
-        face_node.set_obj(i, this.map4v.faces[fi]);
-    }
-
-    component_path_gen(component, map4v, points) {
-        let path = [];
-        let pts = points;
-
-        let root_arc = component[0];
-
-        let last_ep = undefined;
-
-        for (let i = 0; i < component.length; i++) {
-            let j = (i+1) % component.length;
-
-            let p_i = component[i];
-            let p_j = component[j];
-            let p_a = [pts.val[p_i*pts.n], pts.val[p_i*pts.n+1]];
-            let p_b = [pts.val[p_j*pts.n], pts.val[p_j*pts.n+1]];
-
-            let dp = sub(p_b, p_a);
-            let whole_l = norm(dp);
-            let mid_dp = mul(this.g.gamma[p_i]/whole_l, dp);
-            let p_mid = add(p_a, mid_dp);
-
-            path.push(p_mid); // midpoint is anchor
-            path.push(p_b);   // p_b is quadratic bezier control
-        }
-
-        // Close the path
-        path.push(path[0]);
-
-        //console.log(path);
-
-        let pathStr = "M";
-        pathStr += path[0].join(",");
-
-        let idx = 0;
-        for (let pt of path.slice(1)) {
-            if (idx % 2 == 0) {
-                pathStr += "Q";
-            } else {
-                pathStr += " ";
-            }
-            idx += 1;
-            pathStr += pt.join(",");
-        }
-
-        return [path, pathStr];
-    }
-
-    quadratic_segments(path) {
-        let slices = [];
-        for (let i = 0; i < path.length-4; i += 2) {
-            slices.push(path.slice(i, i+3));
-        }
-        slices.unshift(path.slice(path.length-3, path.length));
-
-        return slices;
-    }
-
-    quadratic_segments_to_cubic(segs) {
-        let csegs = [];
-        for (let seg of segs) {
-            let [q0, q1, q2] = seg;
-            csegs.push([q0,
-                        add(q0,mul(2/3 ,sub(q1,q0))),
-                        add(q2,mul(2/3, sub(q1,q2))),
-                        q2]);
-        }
-        return csegs;
-    }
-
-    add_component(component, map4v, points, conv) {
-        // A path of the form anchor, control, anchor...
-        let [path, pathStr] = this.component_path_gen(component, map4v, points);
-
-        let segs = this.quadratic_segments_to_cubic(this.quadratic_segments(path));
-
-        for (let si = 0; si < segs.length; si++) {
-            let tri_i = component[si];
-            if (!conv.edges.some(e => e.includes(tri_i))) {
-                continue;
-            }
-
-            let seg = segs[si];
-
-            let p = Snap.path.findDotsAtSegment(
-                seg[0][0], seg[0][1],
-                seg[1][0], seg[1][1],
-                seg[2][0], seg[2][1],
-                seg[3][0], seg[3][1], .5);
-            this.comp_edgenodes[tri_i] = new CompEdgeNode(this, p.x, p.y, this.g.gamma[tri_i]/2);
-        }
-
-
-        //console.log(pathStr);
-        let knot = this.knotG.path(pathStr+"Z");
-        knot.addClass('knot');
-
-        return knot;
-    }
-
-    update_component(ci, component, map4v, points, conv) {
-        // A path of the form anchor, control, anchor...
-        let [path, pathStr] = this.component_path_gen(component, map4v, points);
-
-        let segs = this.quadratic_segments_to_cubic(this.quadratic_segments(path));
-
-        for (let si = 0; si < segs.length; si++) {
-            let tri_i = component[si];
-            if (!conv.edges.some(e => e.includes(tri_i))) {
-                continue;
-            }
-
-            let seg = segs[si];
-
-            let p = Snap.path.findDotsAtSegment(
-                seg[0][0], seg[0][1],
-                seg[1][0], seg[1][1],
-                seg[2][0], seg[2][1],
-                seg[3][0], seg[3][1], .5);
-
-            this.comp_edgenodes[tri_i].move(p.x, p.y, this.g.gamma[tri_i]/2, this.anim_ms);
-        }
-
-
-        //console.log(pathStr);
-        this.comps[ci].stop();
-        this.comps[ci].animate({"d": pathStr+"Z"}, this.anim_ms);
     }
 }
-
 
 let meshDraw = new MeshDraw("#knot-draw");
 

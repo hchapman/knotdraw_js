@@ -7,12 +7,19 @@ class Face {
         this.arcs = arcs;
         this.exterior = exterior;
 
+        // Real degree, i.e. the number of 4-valent vertices around this face
+        this.degree = this.arcs.length;
+
+        // Real crossings around this face, as opposed to joints
+        this.cross = this.arcs.map(a => a.vert);
+
         // this.edges is array of [arc1index, arc2index] around the face
         // this.edges = this.arcs.map(a => this.link.edges[a.edge].map(b => b.index));
         this.edges = this.arcs.map(a => a.edge);
         this.edgeMap = []; for (let arc of this.arcs) { this.edgeMap[arc.edge] = arc; }
 
         this.turns = this.arcs.map(a => 1);
+
     }
 
     edgeOfIntersection(other) {

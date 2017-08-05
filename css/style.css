@@ -56,11 +56,11 @@ body {
 
 .face {
     fill: teal;
-    fill-opacity: .1;
+    fill-opacity: .2;
 }
 
 .face:hover {
-    fill-opacity: .5;
+    fill-opacity: 1;
 }
 
 .knot {
@@ -91,3 +91,13 @@ body {
 .Set1 .q6-9{stroke:rgb(166,86,40)}
 .Set1 .q7-9{stroke:rgb(247,129,191)}
 .Set1 .q8-9{stroke:rgb(153,153,153)}
+
+.YlGnBu .q0-9{fill:rgb(255,255,217)}
+.YlGnBu .q1-9{fill:rgb(237,248,177)}
+.YlGnBu .q2-9{fill:rgb(199,233,180)}
+.YlGnBu .q3-9{fill:rgb(127,205,187)}
+.YlGnBu .q4-9{fill:rgb(65,182,196)}
+.YlGnBu .q5-9{fill:rgb(29,145,192)}
+.YlGnBu .q6-9{fill:rgb(34,94,168)}
+.YlGnBu .q7-9{fill:rgb(37,52,148)}
+.YlGnBu .q8-9{fill:rgb(8,29,88)}
