@@ -320,7 +320,7 @@ export default class OrthogonalRep {
         for (let [u, v] of this.saturationEdges(false)) {
             let d = D.addEdge(vertexToChain[u], vertexToChain[v]);
             d.dummy = true;
-        }
+       }
         for (let [u, v] of this.saturationEdges(true)) {
             if (kind == 'vertical') {
                 let t = u;

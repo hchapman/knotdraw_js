@@ -697,6 +697,7 @@ Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_0__lib_shadow_js__ = __webpack_require__(3);
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__lib_orthemb_js__ = __webpack_require__(4);
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_2__lib_forcediagram_js__ = __webpack_require__(6);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_2__lib_forcediagram_js___default = __webpack_require__.n(__WEBPACK_IMPORTED_MODULE_2__lib_forcediagram_js__);
 importScripts('lalolib/lalolib.js');
 importScripts('lodash.min.js');
 
@@ -781,22 +782,28 @@ var workerFunctions = {
         for (let [i, vert] of gridEmb) {
             verts[i] = vert;
         }
+        
         let edges = [];
         for (let [source, sink, data] of rep.graph.edgeGen()) {
-            edges.push([source, sink]);
+            //console.log(data);
+            if (!rep.dummy.has(data)) {
+                edges.push([source, sink]);
+            }
         }
         let faces = rep.faces.map(f => f.evPairs.map(ev => ev[1]));
         //faces.forEach(f => f.reverse());
 
-        self.force_shadow = new __WEBPACK_IMPORTED_MODULE_2__lib_forcediagram_js__["a" /* default */](verts, edges, faces);
+        self.components = self.orthShadow.components.map(c => c.map(a => a.vert));
         self.faces = self.orthShadow.faces.map(f => {
             let face = f.arcs.map(a => a.vert);
             face.exterior = f.exterior;
             face.degree = f.degree;
             return face;
         });
-        console.log(faces);
-        self.components = self.orthShadow.components.map(c => c.map(a => a.vert));
+        self.force_shadow = new __WEBPACK_IMPORTED_MODULE_2__lib_forcediagram_js__["default"](verts, edges, self.faces, self.components);
+        
+        //console.log(faces);
+        
 
         postMessage({
             function: "setLinkDiagram",
@@ -812,20 +819,21 @@ var workerFunctions = {
         let thresh = 5e-10;
 
         let curDate;
-        let n_steps = 50;
+        self.n_steps = 50;//50;
+        let max_steps = 50;
 
-        for (let i = 0; i < n_steps; i++) {
+        for (let i = 0; i < max_steps; i++) {
             let procStart = Date.now();
-
+            console.assert(!isNaN(self.force_shadow.aExp));
             postMessage({
                 function: "setLinkDiagram",
                 arguments: [self.force_shadow]
             });
 
             self.force_shadow.update();
-            self.force_shadow.a_exp -= (1 - 0.4)/n_steps;
-            self.force_shadow.re_exp += (4 - 2)/n_steps;
-            self.force_shadow.dbar -= (3*self.force_shadow.delta)/n_steps;
+            self.force_shadow.aExp -= (1 - 0.4)/self.n_steps;
+            self.force_shadow.reExp += (4 - 2)/self.n_steps;
+            self.force_shadow.dbar -= (3*self.force_shadow.delta)/self.n_steps;
 
             //do { curDate = Date.now(); }
             //while( curDate-procStart < 50);
@@ -833,7 +841,19 @@ var workerFunctions = {
 
         postMessage({
             function: "finalizeLinkDiagram",
-            arguments: [self.force_shadow, self.faces, self.components]
+            arguments: [self.force_shadow, self.force_shadow.faces, self.components]
+        });
+    },
+
+    stepUpdate: function() {
+        self.force_shadow.update();
+        self.force_shadow.aExp -= (1 - 0.4)/self.n_steps;
+        self.force_shadow.reExp += (4 - 2)/self.n_steps;
+        self.force_shadow.dbar -= (3*self.force_shadow.delta)/self.n_steps;
+
+        postMessage({
+            function: "finalizeLinkDiagram",
+            arguments: [self.force_shadow, self.force_shadow.faces, self.components]
         });
     }
 }
@@ -1648,7 +1668,7 @@ class OrthogonalRep {
         for (let [u, v] of this.saturationEdges(false)) {
             let d = D.addEdge(vertexToChain[u], vertexToChain[v]);
             d.dummy = true;
-        }
+       }
         for (let [u, v] of this.saturationEdges(true)) {
             if (kind == 'vertical') {
                 let t = u;
@@ -1689,328 +1709,10 @@ class OrthogonalRep {
 
 /***/ }),
 /* 6 */
-/***/ (function(module, __webpack_exports__, __webpack_require__) {
+/***/ (function(module, __webpack_exports__) {
 
 "use strict";
-class ForceLinkDiagram {
-    /* Link diagram embedding improved by ImPrEd */
-    constructor (verts, edges, faces) {
-        this.verts = verts;
-        this.edges = edges;
-        this.faces = faces;
-
-        //console.log("+++++++");
-        //console.log(verts);
-        //console.log(edges);
-        //console.log(faces);
-
-        this.adjMap = {};
-        for (let edge of edges) {
-            let [a, b] = edge;
-            if (a in this.adjMap) {
-                this.adjMap[a].push(b);
-            } else {
-                this.adjMap[a] = [b];
-            }
-
-            if (b in this.adjMap) {
-                this.adjMap[b].push(a);
-            } else {
-                this.adjMap[b] = [a];
-            }
-        }
-
-        this.delta = 2;
-        this.gamma = 5;
-
-        this.dbar = 3*this.delta;
-
-        this.aExp = 1;
-        this.erExp = 2;
-
-        this.calculateSurroundingEdges();
-    }
-
-    distance(u, v) {
-        return norm(sub(u, v));
-    }
-
-    forceAvert(u, v) {
-        //console.log(this.distance(u,v));
-        return mul(Math.pow(this.distance(u, v)/this.delta, this.aExp),
-                   sub(v, u));
-    }
-
-    forceRvert(u, v) {
-        let d = this.distance(u, v);
-        return mul(Math.pow(this.delta/d, this.erExp),
-                   sub(u, v));
-    }
-
-    computeVe(v, a, b) {
-        let m = (a[1] - b[1])/(a[0] - b[0]);
-        let n = -1 / m;
-        let c = a[1] - m*a[0];
-        let d = v[1] - n*v[0];
-
-        if (m == 0) {
-            return [v[0], a[1]];
-        } else if (n == 0) {
-            return [a[0], v[1]];
-        } else {
-            let x = (d - c) / (m - n);
-            return [x, m*x + c];
-        }
-    }
-
-    veOnEdge(ve, a, b) {
-        return (((ve[0] <= a[0] && ve[0] >= b[0]) ||
-                 (ve[0] <= b[0] && ve[0] >= a[0])) &&
-                ((ve[1] <= a[1] && ve[1] >= b[1]) ||
-                 (ve[1] <= b[1] && ve[1] >= a[1])));
-    }
-
-    forceRedge(u, a, b, ve) {
-        let d = this.distance(u, ve);
-        if (d >= this.gamma) {
-            // node and "virtual edge" too far
-            return [0, 0];
-        }
-
-        return mul(-Math.pow(this.gamma - d, this.erExp)/d,
-                   sub(ve, u));
-    }
-
-    surroundingEdges(ui) {
-        // calculate the surrounding edges SUi
-        let edges = [];
-        for (let face of this.faces) {
-            if (face.includes(ui)) {
-                for (let i = 0; i < face.length-1; i++) {
-                    console.assert(this.edges.filter(
-                        e => ((e[0] == face[i] && e[1] == face[i+1]) ||
-                              (e[1] == face[i] && e[0] == face[i+1]))).length > 0);
-                    edges.push([face[i], face[i+1]]);
-                }
-                edges.push([face[face.length-1], face[0]]);
-            }
-        }
-        return edges;
-    }
-
-    calculateSurroundingEdges() {
-        this.surrEdges = [];
-        for (let i = 0; i < this.verts.length; i++) {
-            this.surrEdges[i] = this.surroundingEdges(i);
-        }
-    }
-
-    octant(x, y) {
-        if (x >= 0) {
-            if (y >= 0) {
-                if (x >= y) {
-                    return 0;
-                } else {
-                    return 1;
-                }
-            } else {
-                if (x >= -y) {
-                    return 7;
-                } else {
-                    return 6;
-                }
-            }
-        } else {
-            if (y >= 0) {
-                if (-x >= y) {
-                    return 3;
-                } else {
-                    return 2;
-                }
-            } else {
-                if (-x >= -y) {
-                    return 4;
-                } else {
-                    return 5;
-                }
-            }
-        }
-    }
-
-    move (ui, FUx, FUy, MU) {
-        let i = this.octant(FUx, FUy);
-
-        let FU = [FUx, FUy];
-
-        MU[i] = Math.max(0, MU[i]);
-        let fU = norm(FU);
-        let du;
-        if (fU <= MU[i]) {
-            du = FU;
-        } else {
-            du = mul(MU[i]/fU, FU);
-        }
-
-        this.verts[ui][0] += du[0];
-        this.verts[ui][1] += du[1];
-    }
-
-    update() {
-        //console.log(this.adjMap);
-        let FX = zeros(this.verts.length);
-        let FY = zeros(this.verts.length);
-        let M = [];
-        for (let i = 0; i < this.verts.length; i++) {
-            M.push([this.dbar, this.dbar, this.dbar, this.dbar,
-                    this.dbar, this.dbar, this.dbar, this.dbar]);
-        }
-
-        let barycenter = mul(1/this.verts.length, sum(this.verts, 2));
-
-        for (let ui = 0; ui < this.verts.length; ui++) {
-            // Calculate gravity force
-            let db = sub(barycenter, this.verts[ui]);
-            let nDb = norm(db);
-            FX[ui] += db[0]/nDb;
-            FY[ui] += db[1]/nDb;
-
-            // Calculate total node-node repulsive force
-            for (let vi = 0; vi < this.verts.length; vi++) {
-                if (ui != vi) {
-                    if (this.distance(ui, vi) >= 3*this.delta) {
-                        continue;
-                    }
-
-                    if (this.adjMap[ui].length == 2) {
-                        if (this.adjMap[ui].includes(vi)) {
-                            continue;
-                        }
-                    }
-
-                    let F = this.forceRvert(this.verts[ui], this.verts[vi]);
-                    //console.log("Fnnr", F);
-                    //console.log(ui, vi, this.verts[ui], this.verts[vi], "Fnnr", F);
-                    if (!isNaN(F[0])) {
-                        FX[ui] += F[0];
-                        FY[ui] += F[1];
-                    }
-                }
-            }
-
-            // calculate edge attractive force
-            for (let vi of this.adjMap[ui]) {
-                let F = this.forceAvert(this.verts[ui], this.verts[vi]);
-
-                FX[ui] += F[0];
-                FY[ui] += F[1];
-            }
-
-            // calculate node-edge repulsive force
-            for (let edge of this.surrEdges[ui]) {
-                let [ai, bi] = edge;
-                if (ui == ai || ui == bi) {
-                    continue;
-                }
-                let ve = this.computeVe(
-                    this.verts[ui], this.verts[ai], this.verts[bi]);
-
-                if (this.veOnEdge(ve, this.verts[ai], this.verts[bi])) {
-                    let F = this.forceRedge(
-                        this.verts[ui], this.verts[ai], this.verts[bi], ve);
-                    if (!isNaN(F[0])) {
-                        FX[ui] += F[0];
-                        FY[ui] += F[1];
-                    }
-                }
-            }
-
-            let MU = M[ui];
-            //console.log("Surr:", this.surrEdges);
-
-            for (let edge of this.surrEdges[ui]) {
-                let [ai, bi] = edge;
-                if (ui == ai || ui == bi) {
-                    continue;
-                }
-                let ve = this.computeVe(
-                    this.verts[ui], this.verts[ai], this.verts[bi]);
-
-                let cv;
-
-                if (ui == 0 && ai == 5 && bi == 2) {
-                    //console.log(this.verts[ai], this.verts[bi], ve);
-                }
-                //console.log("v-e", ui, ai, bi);
-                if (this.veOnEdge(ve, this.verts[ai], this.verts[bi])) {
-                    cv = sub(ve, this.verts[ui]);
-
-                } else {
-                    let va = sub(this.verts[ai], this.verts[ui]);
-                    let vb = sub(this.verts[bi], this.verts[ui]);
-                    if (norm(va) < norm(vb)) {
-                        cv = va;
-                    } else {
-                        cv = vb;
-                    }
-                }
-
-                let i = this.octant(cv[0], cv[1]);
-
-                let maxR = norm(cv)/2.1;
-                let cv_angle = Math.atan2(cv[1], cv[0]);
-
-                let ell = (i+4)%8;
-                for (let j = 0; j < MU.length; j++) {
-                    if ((i-j+8)%8 == 0) {
-                        MU[j] = Math.min(MU[j], maxR);
-                    } else if ((i-j+8)%8 == 1 || (i-j+8)%8 == 2) {
-                        MU[j] = Math.min(MU[j], maxR /
-                                         Math.cos(cv_angle - (j+1)*Math.PI/4));
-                    } else if ((i-j+8)%8 == 6 || (i-j+8)%8 == 7) {
-                        MU[j] = Math.min(MU[j], maxR /
-                                         Math.cos(cv_angle - (j)*Math.PI/4));
-                    }
-                }
-
-                let cw_angle = cv_angle + Math.PI;
-
-                for (let j = 0; j < MU.length; j++) {
-                    if ((ell-j+8)%8 == 0) {
-                        M[ai][j] = Math.min(M[ai][j], maxR);
-                    } else if ((ell-j+8)%8 == 1 || (ell-j+8)%8 == 2) {
-                        M[ai][j] = Math.min(M[ai][j], maxR /
-                                            Math.cos(cw_angle - (j+1)*Math.PI/4));
-                    } else if ((ell-j+8)%8 == 6 || (ell-j+8)%8 == 7) {
-                        M[ai][j] = Math.min(M[ai][j], maxR /
-                                            Math.cos(cw_angle - (j)*Math.PI/4));
-                    }
-                }
-
-                for (let j = 0; j < MU.length; j++) {
-                    if ((ell-j+8)%8 == 0) {
-                        M[bi][j] = Math.min(M[bi][j], maxR);
-                    } else if ((ell-j+8)%8 == 1 || (ell-j+8)%8 == 2) {
-                        M[bi][j] = Math.min(M[bi][j], maxR /
-                                            Math.cos(cw_angle - (j+1)*Math.PI/4));
-                    } else if ((ell-j+8)%8 == 6 || (ell-j+8)%8 == 7) {
-                        M[bi][j] = Math.min(M[bi][j], maxR /
-                                            Math.cos(cw_angle - (j)*Math.PI/4));
-                    }
-                }
-
-            }
-            //if (ui == 0) console.log("MU0", MU, FX[ui], FY[ui]);
-        }
-
-        //console.log("Fx", FX);
-        for (let ui in this.verts) {
-            this.move(ui, FX[ui], FY[ui], M[ui]);
-        }
-    }
-}
-/* harmony export (immutable) */ __webpack_exports__["a"] = ForceLinkDiagram;
-
-
+throw new Error("Module parse failed: /home/harrison/data/src/pdjs/src/lib/forcediagram.js Unexpected token (356:41)\nYou may need an appropriate loader to handle this file type.\n|                 let [ai, bi] = path.slice(i,i+2);\n|                 let [a, b] = [this.verts[ai], this.verts[bi]];\n|                 let elen = norm(sub(a, b);\n|                 if (elen) > this.beta) {\n|                     // Insert a new vertex along this path");
 
 /***/ })
 /******/ ]);

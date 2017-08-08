@@ -82,22 +82,28 @@ var workerFunctions = {
         for (let [i, vert] of gridEmb) {
             verts[i] = vert;
         }
+        
         let edges = [];
         for (let [source, sink, data] of rep.graph.edgeGen()) {
-            edges.push([source, sink]);
+            //console.log(data);
+            if (!rep.dummy.has(data)) {
+                edges.push([source, sink]);
+            }
         }
         let faces = rep.faces.map(f => f.evPairs.map(ev => ev[1]));
         //faces.forEach(f => f.reverse());
 
-        self.force_shadow = new ForceLinkDiagram(verts, edges, faces);
+        self.components = self.orthShadow.components.map(c => c.map(a => a.vert));
         self.faces = self.orthShadow.faces.map(f => {
             let face = f.arcs.map(a => a.vert);
             face.exterior = f.exterior;
             face.degree = f.degree;
             return face;
         });
-        console.log(faces);
-        self.components = self.orthShadow.components.map(c => c.map(a => a.vert));
+        self.force_shadow = new ForceLinkDiagram(verts, edges, self.faces, self.components);
+        
+        //console.log(faces);
+        
 
         postMessage({
             function: "setLinkDiagram",
@@ -113,20 +119,21 @@ var workerFunctions = {
         let thresh = 5e-10;
 
         let curDate;
-        let n_steps = 50;
+        self.n_steps = 50;//50;
+        let max_steps = 50;
 
-        for (let i = 0; i < n_steps; i++) {
+        for (let i = 0; i < max_steps; i++) {
             let procStart = Date.now();
-
+            console.assert(!isNaN(self.force_shadow.aExp));
             postMessage({
                 function: "setLinkDiagram",
                 arguments: [self.force_shadow]
             });
 
             self.force_shadow.update();
-            self.force_shadow.a_exp -= (1 - 0.4)/n_steps;
-            self.force_shadow.re_exp += (4 - 2)/n_steps;
-            self.force_shadow.dbar -= (3*self.force_shadow.delta)/n_steps;
+            self.force_shadow.aExp -= (1 - 0.4)/self.n_steps;
+            self.force_shadow.reExp += (4 - 2)/self.n_steps;
+            self.force_shadow.dbar -= (3*self.force_shadow.delta)/self.n_steps;
 
             //do { curDate = Date.now(); }
             //while( curDate-procStart < 50);
@@ -134,7 +141,19 @@ var workerFunctions = {
 
         postMessage({
             function: "finalizeLinkDiagram",
-            arguments: [self.force_shadow, self.faces, self.components]
+            arguments: [self.force_shadow, self.force_shadow.faces, self.components]
+        });
+    },
+
+    stepUpdate: function() {
+        self.force_shadow.update();
+        self.force_shadow.aExp -= (1 - 0.4)/self.n_steps;
+        self.force_shadow.reExp += (4 - 2)/self.n_steps;
+        self.force_shadow.dbar -= (3*self.force_shadow.delta)/self.n_steps;
+
+        postMessage({
+            function: "finalizeLinkDiagram",
+            arguments: [self.force_shadow, self.force_shadow.faces, self.components]
         });
     }
 }

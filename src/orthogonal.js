@@ -1,3 +1,4 @@
+
 class MeshDraw {
     constructor(div) {
         this.nodes = [];
@@ -5,14 +6,18 @@ class MeshDraw {
         this.comp_edgenodes = [];
         this.comps = [];
 
-        this.draw = Snap(div);
+        this.draw = document.querySelector(div);
+        let self = this;
+        paper.setup(this.draw);
+        paper.project.view.on('resize', function(e) {
+            self.resizeView();
+            return;
+        });
 
-        this.edgeG = this.draw.g();
-        this.nodeG = this.draw.g();
-        this.faceG = this.draw.g();
-        this.faceG.addClass("YlGnBu");
-        this.knotG = this.draw.g();
-        this.knotG.addClass("Set1");
+        this.edgeG = new paper.Layer();
+        this.nodeG = new paper.Layer();
+        this.faceG = new paper.Layer();
+        this.knotG = new paper.Layer();
     }
 
     clear() {
@@ -27,41 +32,78 @@ class MeshDraw {
         this.knotG.clear();
     }
 
+    resizeView() {
+        let viewSize = paper.project.view.getViewSize();
+
+        if (viewSize.height/this.viewHeight < viewSize.width/this.viewWidth) {
+            this.zoom = viewSize.height / this.viewHeight;
+        } else {
+            this.zoom = viewSize.width / this.viewWidth;
+        }
+        paper.project.view.setZoom(this.zoom);
+
+        paper.project.view.setCenter([this.min_x+this.wid/2, this.min_y+this.hgt/2]);
+    }
+
     set_link_diagram(ld) {
         let pts = array2mat(ld.verts);
         //console.log(pts);
-        let min_x = min(get(pts, range(), 0));
-        let min_y = min(get(pts, range(), 1));
+        this.min_x = ld.verts.reduce((m, [x,y]) => Math.min(m, x), Infinity);
+        this.min_y = ld.verts.reduce((m, [x,y]) => Math.min(m, y), Infinity);
 
-        let max_x = max(get(pts, range(), 0));
-        let max_y = max(get(pts, range(), 1));
+        this.max_x = ld.verts.reduce((m, [x,y]) => Math.max(m, x), -Infinity);
+        this.max_y = ld.verts.reduce((m, [x,y]) => Math.max(m, y), -Infinity);
 
-        let wid = max_x-min_x;
-        let hgt = max_y-min_y;
+        this.wid = this.max_x-this.min_x;
+        this.hgt = this.max_y-this.min_y;
 
-        let dx = wid*0.05;
-        let dy = hgt*0.05;
+        this.dx = this.wid*0.05;
+        this.dy = this.hgt*0.05;
+
+        this.viewHeight = this.hgt + this.dy*2;
+        this.viewWidth = this.wid + this.dx*2;
 
         //console.log(min_x, max_x);
 
         //this.nodeG.clear();
         //this.edgeG.clear();
 
-        this.draw.attr({viewBox: [(min_x-dx),
-                                  (min_y-dy),
-                                  (wid+2*dx),
-                                  (hgt+2*dy)].join(",")});
+        paper.project.clear();
+
+        /*let bds = paper.project.view.bounds;
+        if (bds.height < bds.width) {
+            paper.project.view.scale(bds.height / (this.hgt+2*this.dy));
+        } else {
+            paper.project.view.scale(bds.width / (this.wid+2*this.dy));
+            }*/
+
+        this.resizeView();
+
+        let c = new paper.Path.Rectangle(this.min_x, this.min_y, this.wid, this.hgt);
+
+        c.strokeColor = 'blue';
+        c.strokeWidth = 1;
+        c.strokeScaling = false;
 
         let i = 0;
         //console.log(ld.verts, "!!");
-        for (let vert of ld.verts) {
+        for (let vi in ld.verts) {
+            let vert = ld.verts[vi];
+            if (vert === undefined) { continue; }
             //this.nodeG.circle(vert[0], vert[1], .25);
             if (this.nodes[i] === undefined) {
-                let t = this.nodeG.text(vert[0], vert[1], i.toString());
-                t.attr({"style": "font-size: .5px;"});
-                this.nodes[i] = t;
+                let t = new paper.PointText({
+                    point: vert,
+                    content: ""+vi,
+                    fontSize: 12,
+                });
+                t.scale(1/this.zoom, vert);
+                //console.log(t.scaling, t.applyMatrix);
+                //let t = this.nodeG.text(vert[0], vert[1], i.toString());
+                //t.attr({"style": "font-size: .5px;"});
+                //this.nodes[i] = t;
             } else {
-                this.nodes[i].attr({'x': vert[0], 'y': vert[1]});
+                //this.nodes[i].attr({'x': vert[0], 'y': vert[1]});
             }
             i++;
         }
@@ -69,9 +111,15 @@ class MeshDraw {
         for (let edge of ld.edges) {
             let [a, b] = [ld.verts[edge[0]], ld.verts[edge[1]]];
             if (this.edges[edge] === undefined) {
-                this.edges[edge] = this.edgeG.line(a[0], a[1], b[0], b[1]).addClass("edge");
+                let edgePath = new paper.Path();
+                edgePath.strokeColor = 'green';
+                edgePath.strokeWidth = .25;
+                edgePath.strokeScaling = false;
+                edgePath.add(new paper.Point(a[0], a[1]));
+                edgePath.add(new paper.Point(b[0], b[1]));
+                //this.edges[edge] = this.edgeG.line(a[0], a[1], b[0], b[1]).addClass("edge");
             } else {
-                this.edges[edge].attr({'x1': a[0], 'y1': a[1], 'x2': b[0], 'y2': b[1]});
+                //this.edges[edge].attr({'x1': a[0], 'y1': a[1], 'x2': b[0], 'y2': b[1]});
             }
         }
     }
@@ -80,26 +128,78 @@ class MeshDraw {
         let min_radii = [];
         for (let ai in ld.verts) {
             let a = ld.verts[ai];
-            min_radii[ai] = Math.min(...ld.verts.map(
-                (b, bi) => bi == ai ? Infinity : norm(sub(a, b))))/2;
-            
-            let t = this.nodeG.circle(a[0], a[1], min_radii[ai]);
-            t.addClass("plnode");
+            //console.log(ld.adjMap[ai]);
+            if (ld.adjMap[ai].length != 2) {
+                // ai is a crossing
+                min_radii[ai] = ld.verts.reduce((r, p, pi) => ai==pi ? r : Math.min(r, norm(sub(a, p))), Infinity)/2;
+                //min_radii[ai] = Math.min(...ld.verts.map(
+                //    (b, bi) => bi == ai ? Infinity : norm(sub(a, b))))/2;
+            } else {
+                // ai is an edge
+                let [bi, ci] = ld.adjMap[ai];
+                let [b, c] = [ld.verts[bi], ld.verts[ci]];
+                let u = [b[0]-a[0], b[1]-a[1]];
+                let v = [c[0]-a[0], c[1]-a[1]];
+
+                let phi_u = Math.atan2(u[1], u[0]);
+                let phi_v = Math.atan2(v[1], v[0]);
+
+                // we only want to consider points which are in the
+                // angle between u and v.
+                // we check phi_u - phi_v.
+                if ((phi_u - phi_v + (Math.PI*2)) % (Math.PI * 2) > Math.PI) {
+                    let tmp = phi_u;
+                    phi_v = phi_u;
+                    phi_u = tmp; // (phi_u - phi_v) % Math.PI*2 <= Math.PI
+                }
+
+                let phi = (phi_u - phi_v + (Math.PI*2)) % (Math.PI * 2);
+                console.assert(phi <= Math.PI);
+
+                min_radii[ai] = Math.min(...ld.verts.filter(
+                    (x, xi) => {
+                        if (xi == ai) { return false; }
+                        if (xi == bi || xi == ci) { return true; }
+                        let w = [x[0]-a[0], x[1]-a[1]];
+                        let phi_w = Math.atan2(w[1], w[0]);
+                        return (phi_u - phi_w + (Math.PI*2)) % (Math.PI*2) < phi;
+                    }
+                ).map(x => norm(sub(a, x))))/2;
+                //console.log(min_radii[ai]);
+            }
+
+            let nodeCircle = new paper.Path.Circle(a[0], a[1], min_radii[ai]);
+            nodeCircle.strokeColor = 'red';
+            nodeCircle.strokeWidth = .1;
+            nodeCircle.strokeScaling = false;
+            //let t = this.nodeG.circle(a[0], a[1], min_radii[ai]);
+            //t.addClass("plnode");
         }
+        paper.project.view.update();
 
         let vertPaths = [];
+        let edgePaths = [];
+        let crssPaths = [];
+        let p;
+
+        const N = ld.verts.length;
+        function tup(a, b, c) {
+            if (b === undefined) {
+                return a;
+            } else if (c === undefined) {
+                return a*N+b;
+            } else {
+                return a*N*N + b*N + c;
+            }
+        }
+
         for (let ci = 0; ci < components.length; ci++) {
             let component = components[ci];
             let cmp = [component[component.length-1]].concat(component).concat([component[0]]);
             let laststop, firststart;
+
             for (let i = 0; i < cmp.length-2; i++) {
                 let bend = cmp.slice(i, i+3);
-                // Pretty, but inaccurate
-                // let start = mul(.5, add(ld.verts[bend[0]], ld.verts[bend[1]]));
-                // let ctrl = ld.verts[bend[1]];
-                // let stop = mul(.5, add(ld.verts[bend[1]], ld.verts[bend[2]]));
-
-                // Accurate, but jaggier
 
                 let dstart = sub(ld.verts[bend[0]], ld.verts[bend[1]]);
                 let start = add(ld.verts[bend[1]],
@@ -109,63 +209,191 @@ class MeshDraw {
                 let dstop = sub(ld.verts[bend[2]], ld.verts[bend[1]]);
                 let stop = add(ld.verts[bend[1]],
                                mul(min_radii[bend[1]]/norm(dstop), dstop));
-                let p, pStr;
                 if (laststop !== undefined) {
                     //pStr = "M"+laststop+"L"+start+"Q"+ctrl+" "+stop;
-                    pStr = "M"+start+"C"+ctrl+ctrl+" "+stop;
+                    p = new paper.Path("M"+laststop+"L"+start+"Q"+ctrl+" "+stop);
                 } else {
-                    pStr = "M"+start+"C"+ctrl+ctrl+" "+stop;
+                    //pStr = "M"+start+"C"+ctrl+ctrl+" "+stop;
+                    p = new paper.Path("M"+start+"Q"+ctrl+" "+stop);
                 }
-                p = this.knotG.path(pStr);
-                p.addClass("knot")
-                    .addClass("q"+(ci%9)+"-9");
+                p.strokeColor = 'black';
+                p.strokeWidth = 1;
+                p.strokeScaling = false;
 
                 if (vertPaths[bend[1]] === undefined) {
-                    vertPaths[bend[1]] = [p];
+                    vertPaths[bend[1]] = {type: "edge",
+                                          idx: bend};
+
+                    edgePaths[tup(...bend)] = p.clone({insert: false});
+                    if (bend[1] == 5) {
+                        //console.log(bend, edgePaths[tup(...bend)]);
+                    }
                 } else {
-                    console.log(p);
-                    console.log(vertPaths[bend[1]][0]);
-                    console.log(Snap.path.intersection(p, vertPaths[bend[1]][0]));
+                    // This 'edge' is actually a crossing, so let's break it up
+                    // pathA goes bend0 -> bend1 -> bend2
+                    // pathB goes in component order, too
+                    let obend = vertPaths[bend[1]].idx;
+                    let pathA = p.clone({insert: false});
+                    let pathB = edgePaths[tup(...obend)].clone({insert: false});
+                    let outIdxs = [bend[0], bend[2], obend[0], obend[2]];
+
+                    // Delete edgePaths for this, since it's not really an edge
+                    delete edgePaths[tup(...vertPaths[bend[1]].idx)];
+
+                    let cross = pathA.getCrossings(pathB);
+                    // Create a crossing effect (TODO: signage, robustness?)
+                    let xing = new paper.Path.Circle(cross[0].point, .1);
+                    //let q = p.divide(xing);
+                    xing.fillColor = 'violet';
+                    let ch = p.subtract(xing, {trace: false});
+                    //ch.selected = true;
+                    //let ch = xing.subtract(p);
+                    ch.strokeColor = 'black';
+                    ch.strokeWidth = 1;
+                    ch.strokeScaling = false;
+                    p.remove();
+                    xing.remove();
+
+                    xing = new paper.Path.Circle(cross[0].point, .01);
+                    xing.remove();
+
+                    //laststop = stop;
+                    //continue;
+
+                    // Create paths for each of the crossing directions,
+                    // originating from the crossing (for consistency);
+                    let cutPaths = pathA.subtract(xing, {trace: false});
+                    if (cutPaths.children === undefined) {
+                        //laststop = stop;
+                        //continue;
+                        //console.log("pathA", pathA);
+                        //console.log("pathB", pathB);
+                        //console.log(cross);
+                        //console.log(cutPaths);
+                        pathA.addTo(paper.project);
+                        pathB.addTo(paper.project);
+                        pathA.strokeColor = "blue";
+                        pathB.strokeColor = "green";
+                        cutPaths.addTo(paper.project);
+                        cutPaths.fullySelected = true;
+                        //console.log(cutPaths);
+                        return;
+                    }
+                    let arc1 = cutPaths.children[0];
+                    arc1.reverse();
+                    let arc2 = cutPaths.children[1];
+
+                    cutPaths = pathB.subtract(xing, {trace: false});
+
+                    if (cutPaths.children === undefined) {
+                        //laststop = stop;
+                        //continue;
+                        //console.log("pathA", pathA);
+                        //console.log("pathB", pathB);
+                        //console.log(cross);
+                        //console.log(cutPaths);
+                        pathA.addTo(paper.project);
+                        pathB.addTo(paper.project);
+                        pathA.strokeColor = "violet";
+                        pathB.strokeColor = "orange";
+                        cutPaths.addTo(paper.project);
+                        cutPaths.fullySelected = true;
+                        //console.log(cutPaths);
+                        return;
+                    }
+                    let arc3 = cutPaths.children[0];
+                    arc3.reverse();
+                    let arc4 = cutPaths.children[1];
+
+                    vertPaths[bend[1]] = {type: "cross",
+                                          outs: outIdxs};
+
+                    crssPaths[tup(bend[1], outIdxs[0])] = arc1;
+                    crssPaths[tup(bend[1], outIdxs[1])] = arc2;
+                    crssPaths[tup(bend[1], outIdxs[2])] = arc3;
+                    crssPaths[tup(bend[1], outIdxs[3])] = arc4;
                 }
 
                 laststop = stop;
             }
-            this.knotG.path("M"+laststop+"L"+firststart)
-                .addClass("knot")
-                .addClass("q"+(ci%9)+"-9");
+            p = new paper.Path("M"+laststop+"L"+firststart);
+            p.strokeColor = 'black';
+            p.strokeWidth = 1;
+            p.strokeScaling = false;
+
+            //vertPaths[cmp[cmp.length-2]].join(p);
         }
+
+        paper.project.insertLayer(0, new paper.Layer()).activate();
+        //console.log(paper.project.activeLayer);
+        //return;
 
         for (let fi = 0; fi < faces.length; fi++) {
             let face = faces[fi];
-            let cmp = [face[face.length-1]].concat(face).concat([face[0]]);
+            let cface = [face[face.length-1]].concat(face).concat([face[0]]);
 
             if (face.exterior) {
                 continue;
             }
 
+            //console.log(vertPaths);
             let laststop, firststart;
             let pathStr;
-            for (let i = 0; i < cmp.length-2; i++) {
-                let bend = cmp.slice(i, i+3);
+            let segs;
+            segs = [];
+            for (let i = 0; i < cface.length-2; i++) {
+                let bend = cface.slice(i, i+3);
 
-                let dstart = sub(ld.verts[bend[0]], ld.verts[bend[1]]);
-                let start = add(ld.verts[bend[1]],
-                                mul(min_radii[bend[1]]/norm(dstart), dstart));
-                if (firststart == undefined) {
-                    firststart = start;
-                    pathStr = "M"+start;
+                if (bend[1] in vertPaths) {
+                    let vp = vertPaths[bend[1]];
+                    if (vp.type == "edge") {
+                        // Push the edge
+                        if (bend[0] == vp.idx[0]) {
+                            segs.splice(segs.length,0,...edgePaths[tup(...vp.idx)].segments);
+                        } else {
+                            let tempP = edgePaths[tup(...vp.idx)].clone({insert: false});
+                            tempP.reverse();
+                            segs.splice(segs.length,0,
+                                        ...tempP.segments);
+                        }
+                    } else if (vp.type == "cross") {
+                        // Push the two appropriate segments
+                        // ---->crs (in)
+                        let tempP = crssPaths[tup(bend[1], bend[0])].clone({insert: false});
+                        tempP.reverse();
+                        segs.splice(segs.length,0,
+                                    ...tempP.segments);
+
+                        // crs----> (out)
+                        segs.splice(segs.length,0,
+                                    ...crssPaths[tup(bend[1], bend[2])].segments);
+                    }
                 }
-                let ctrl = ld.verts[bend[1]];
-                let dstop = sub(ld.verts[bend[2]], ld.verts[bend[1]]);
-                let stop = add(ld.verts[bend[1]],
-                               mul(min_radii[bend[1]]/norm(dstop), dstop));
-                pathStr += "L"+start+"Q"+ctrl+" "+stop;
-                laststop = stop;
+
+                for (let j = 0; j < vertPaths[cface[i]].length; j++) {
+                    segs.splice(segs.length,0,...vertPaths[cface[i]][j].segments.slice(0));
+                    p = new paper.Path(vertPaths[cface[i]][j].segments);
+                    p.strokeColor = "blue";
+                    p.strokeWidth = 1;
+                    p.strokeScaling = false;
+                    
+                }
+                //break;
             }
+            p = new paper.Path(segs);
             //console.log(pathStr);
-            this.faceG.path(pathStr)
-                .addClass("face")
-                .addClass("q"+(face.degree-1)+"-9");
+            //console.log(segs);
+            p.fillColor = "red";
+            p.fillColor.alpha = .2;
+            p.strokeScaling = false;
+            p.onMouseEnter = function(e) {
+                this.fillColor.alpha = .5;
+            }
+            p.onMouseLeave = function(e) {
+                this.fillColor.alpha = .2;
+            }
+            //p.fullySelected = true;
+            //break;
         }
     }
 }
@@ -188,6 +416,13 @@ function drawRandomMapAsync(n_verts=20, n_comps=0, max_att=50, type=0) {
     cpWorker.postMessage({
         function: "setRandomLinkDiagram",
         arguments: [n_verts, n_comps, max_att, type]
+    });
+}
+
+function stepMapUpdate() {
+    cpWorker.postMessage({
+        function: "stepUpdate",
+        arguments: []
     });
 }
 
@@ -241,7 +476,10 @@ cpWorker.onmessage = function(ev) {
 //let sigma = [[1, 4, 2, 3], [0, 8, 7, 15], [5, 14, 6, 13], [9, 12, 10, 11]];
 
 // (2,5) torus
-let sigma = [[0, 10, 19, 9], [1, 12, 2, 11], [3, 13, 4, 14], [5, 16, 6, 15], [7, 17, 8, 18]];
+//let sigma = [[0, 10, 19, 9], [1, 12, 2, 11], [3, 13, 4, 14], [5, 16, 6, 15], [7, 17, 8, 18]];
+
+//let sigma = [[3,5,4,1],[0,2,7,9],[8,6,11,10]];
+let sigma = [[7,1,3,5],[4,11,0,9],[12,8,6,13],[10,2,15,14]];
 
 // Random composite
 //let sigma = [[0, 57, 79, 58], [1, 59, 2, 60], [3, 78, 4, 77], [5, 11, 6, 12], [7, 9, 8, 10], [13, 16, 14, 15], [17, 56, 18, 55], [19, 54, 20, 53], [21, 36, 22, 35], [23, 25, 24, 26], [27, 29, 28, 30], [31, 46, 32, 45], [33, 39, 34, 40], [37, 52, 38, 51], [41, 44, 42, 43], [47, 50, 48, 49], [61, 72, 62, 71], [63, 73, 64, 74], [65, 68, 66, 67], [69, 76, 70, 75]];
@@ -286,3 +524,12 @@ document.getElementById("map_random").onclick = function(ev) {
         console.log("Error:", err);
     }
 };
+
+document.getElementById("map_step").onclick = function(ev) {
+    try {
+        meshDraw.clear();
+        stepMapUpdate();
+    } catch(err) {
+        
+    }
+}

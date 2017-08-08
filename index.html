@@ -9,9 +9,10 @@
   <body>
     <header>
       <div id="options", style="width: 100%;">
-        <label>Knot to draw: &sigma; = <input type="text" style="width: 70%;" id="map_input"></label>
+        <label>Knot to draw: &sigma; = <input type="text" style="width: 100;" id="map_input"></label>
         <button id="map_submit" data-target="#map_input" data-errbox="#map_errbox">Draw</button>
         <button id="map_random" data-errbox="#map_errbox">Random!</button>
+        <button id="map_step">Step update</button>
         <br>
         <div id="random-settings" style="display: inline">
           <label># crossings <input type="number" id="random-ncross" value="20" min="1" max="300"></label>
@@ -27,11 +28,11 @@
       </div>
     </header>
     <div id="container">
-      <svg id="knot-draw" viewBox="-100 -100 200 200">
-      </svg>
+      <canvas id="knot-draw" resize>
+      </canvas>
     </div>
     <script src="js/lodash.min.js"></script>
-    <script src='https://cdnjs.cloudflare.com/ajax/libs/snap.svg/0.5.1/snap.svg-min.js'></script>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/paper.js/0.11.4/paper-full.min.js'></script>
     <script src='js/lalolib/lalolib.js'></script>
 
     <script src="js/orthogonal.js"></script>
