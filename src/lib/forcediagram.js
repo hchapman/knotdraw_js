@@ -1,3 +1,4 @@
+
 export default class ForceLinkDiagram {
     /* Link diagram embedding improved by ImPrEd */
     constructor (verts, edges, faces, components) {
@@ -18,7 +19,7 @@ export default class ForceLinkDiagram {
         this.components = components;
 
         this.freeVi = [];
-        this.maxVi = Math.max(...verts.keys())+1;
+        this.maxVi = Math.max(...verts.keys());
 
         this.adjMap = {};
         for (let edge of edges) {
@@ -45,7 +46,7 @@ export default class ForceLinkDiagram {
         }
         this.paths = [];
         let edgeSearch = new Set(this.edges.map(e => index(e)));
-        while (edgeSearch.size > 0) {
+        while (edgeSearch.size) {
             let path;
             let edge = deindex(edgeSearch.values().next().value);
             edgeSearch.delete(index(edge));
@@ -95,16 +96,34 @@ export default class ForceLinkDiagram {
         this.calculateSurroundingEdges();
 
         this.numIter = 0;
+
+        this._cacheDistances;
     }
 
     newVertIdx() {
-        if (this.freeVi.length > 0) {
+        if (this.freeVi.length) {
             return this.freeVi.pop();
         }
-        return this.verts.size;
+        return ++this.maxVi;
     }
 
     distance(u, v) {
+        if (this._cacheDistances !== undefined) {
+            let cu = this._cacheDistances.get(u);
+            if (cu !== undefined) {
+                let cuv = cu.get(v);
+                if (cuv !== undefined) {
+                    return cuv;
+                }
+            } else {
+                cu = new Map()
+                this._cacheDistances.set(u, cu);
+            }
+            let d = norm(sub(u, v));
+            cu.set(v, d);
+            return d;
+        }
+        // this._cacheDistances === undefined --> no caching
         return norm(sub(u, v));
     }
 
@@ -336,7 +355,7 @@ export default class ForceLinkDiagram {
                 let elen = norm(sub(a, b));
                 if (elen > this.beta) {
                     // Insert a new vertex along this path
-                    let vi = this.maxVi++;
+                    let vi = this.newVertIdx();
                     this.verts.set(vi, mul(.5, add(a, b)));
 
                     // Edge to delete; which was split
@@ -412,17 +431,21 @@ export default class ForceLinkDiagram {
 
     update() {
 
-        // if (contract) {
+        // We can't trust distances while we contract/expand, maybe??
+        this._cacheDistances = undefined;
+
         if (true) {
             this.contract();
         }
 
-        // if (expand) {
-        if (true) {
+        if (this.numIter < 20) {
             this.expand();
         }
 
         this.numIter++;
+
+        // Distances are fixed until next move
+        this._cacheDistances = new Map();
 
         let F = new Map(Array.from(this.verts.keys()).map(k => [k, [0,0]])); //zeros(this.verts.size);
         let M = new Map();

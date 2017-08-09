@@ -1,3 +1,5 @@
+var pathUtil = require('path');
+
 module.exports = {
     module: {
         rules: [

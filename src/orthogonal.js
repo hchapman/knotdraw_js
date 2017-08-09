@@ -88,7 +88,7 @@ class MeshDraw {
         let i = 0;
         //console.log(ld.verts, "!!");
         for (let [vi, vert] of ld.verts) {
-            
+            break;
             if (vert === undefined) { continue; }
             //this.nodeG.circle(vert[0], vert[1], .25);
             if (this.nodes[i] === undefined) {
