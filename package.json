@@ -12,7 +12,7 @@
     "closure-loader": "^0.3.1",
     "quadtree-lib": "^1.0.7",
     "snapsvg": "^0.5.1",
-    "webpack": "^2.7.0"
+    "webpack": "^3.5.1"
   },
   "dependencies": {
     "svg.intersections.js": "^1.1.3"

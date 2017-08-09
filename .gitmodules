@@ -1,3 +1,6 @@
 [submodule "planarmap"]
 	path = src/planarmap
 	url = git@github.com:hchapman/planarmap.git
+[submodule "src/Quadtree-es6"]
+	path = src/Quadtree-es6
+	url = https://github.com/TobyColeman/Quadtree-es6.git

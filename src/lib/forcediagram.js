@@ -1,3 +1,6 @@
+import QuadTree from "../Quadtree-es6/quadtree.js";
+import Point from "../Quadtree-es6/math/point.js";
+import Quad from "../Quadtree-es6/math/quad.js";
 
 export default class ForceLinkDiagram {
     /* Link diagram embedding improved by ImPrEd */
@@ -80,6 +83,13 @@ export default class ForceLinkDiagram {
             this.paths.push(path);
         }
 
+        this.initParams();
+        this.calculateSurroundingEdges();
+
+        this._cacheDistances;
+    }
+
+    initParams() {
         this.delta = 2;
         this.gamma = 5;
 
@@ -93,11 +103,146 @@ export default class ForceLinkDiagram {
         this.aExp = 1;
         this.erExp = 2;
 
-        this.calculateSurroundingEdges();
-
         this.numIter = 0;
+    }
 
-        this._cacheDistances;
+    deleteVertex(vi) {
+        /* Deletes a vert, breaking paths, components, and faces (you must fix) */
+        this.verts.delete(vi);
+        delete this.adjMap[vi];
+        delete this.edgeMatrix[vi];
+        this.surrEdges.delete(vi);
+        this.freeVi.push(vi);
+
+        // Delete this vertex from any faces it is in
+    }
+
+    deleteEdge(edge) {
+        /* Deletes an edge, breaking paths, components, and faces (you must fix) */
+
+        let [ai, bi] = edge;
+
+        // Delete this edge from the matrix
+        delete this.edgeMatrix[ai][bi];
+        delete this.edgeMatrix[bi][ai];
+
+        // Remove from edges
+        this.edges.splice(this.edges.indexOf(edge), 1);
+
+        // ai is no longer adjacent to bi
+        this.adjMap[ai].splice(this.adjMap[ai].indexOf(bi), 1);
+        this.adjMap[bi].splice(this.adjMap[bi].indexOf(ai), 1);
+
+        // Update surrEdges; faces is potentially broken after this op
+        for (let f of this.faces) {
+            // check if this edge is in this face
+            let fi = f.findIndex((v, i, f) => f[i]==ai && f[(i+1)%f.length]==bi);
+            if (fi == -1) {
+                fi = f.findIndex((v, i, f) => f[i]==bi && f[(i+1)%f.length]==ai);
+            }
+            if (fi == -1) { continue; }
+
+            // Update surrEdges for vertices in f which AREN'T vi
+            for (let ui of f) {
+                if (this.surrEdges.has(ui))
+                    this.surrEdges.get(ui).delete(edge);
+            }
+        }
+    }
+
+    deleteMonogon(fi) {
+        let delFace = this.faces[fi].slice(); // copy of face to delete
+        let monoXi; // The unique crossing vertex index in this monogon
+        let monoPi; // The unique path which consists of this loop, to delete
+
+        monoXi = delFace.find(vi => this.adjMap[vi].length == 4);
+
+        for (let i = 0; i < delFace.length; i++) {
+            let ai, bi;
+            if (i == delFace.length-1) {
+                [ai, bi] = [delFace[i], delFace[0]];
+            } else {
+                [ai, bi] = delFace.slice(i, i+2);
+            }
+            let delEdge = this.edgeMatrix[ai][bi];
+
+            // Delete edge ai->bi
+            this.deleteEdge(delEdge);
+        }
+
+        for (let ai of delFace) {
+            if (!this.adjMap[ai].length) {
+                // Vertex ai is stranded, delete it
+                this.deleteVertex(ai);
+
+                // Find the path for this monogon, to delete later
+                if (monoPi === undefined) {
+                    monoPi = this.paths.findIndex(p => p.includes(ai));
+                }
+
+                // Remove ai from its component
+                this.components.forEach(c => {
+                    let cai = c.indexOf(ai);
+                    if (cai != -1) {
+                        c.splice(cai, 1);
+                    }
+                });
+            }
+        }
+
+        // Delete this path
+        this.paths.splice(monoPi, 1);
+
+        // monoXi is in two paths; we want to combine them.
+        let path1_i = this.paths.findIndex(p => p.includes(monoXi));
+        let path2_i = path1_i+1 + this.paths.slice(path1_i+1).findIndex(p => p.includes(monoXi));
+        let [p1, p2] = [this.paths[path1_i], this.paths[path2_i]];
+        let x_p1i = p1.indexOf(monoXi); // either 0 or length-1
+        if (x_p1i == 0) { p1.reverse(); } // crossing is now at end of p1
+        if (p1.indexOf(monoXi) == 0) {
+            // edge case--self loop edge (impossible) or
+            // (actual) -> single twist diagram is being untwisted
+            // sufficient to just remove path2
+            this.paths.splice(path2_i, 1);
+            
+        } else {
+
+            let x_p2i = p2.indexOf(monoXi); // either 0 or length-1
+            if (x_p2i != 0) { p2.reverse(); } // crossing is not at front of p2
+
+            // remove paths from this.paths
+            this.paths.splice(path2_i, 1);
+            this.paths.splice(path1_i, 1);
+
+            this.paths.push(p1.concat(p2.slice(1)));
+
+        }
+
+        for (let vi of delFace) {
+            this.faces.forEach(f => {
+                let fai = f.indexOf(vi);
+                if (fai != -1) {
+                    if (vi == monoXi) {
+                        fai = f.indexOf(vi, fai+1);
+                        if (fai == -1) {
+                            return;
+                        }
+                    }
+                    f.splice(fai, 1);
+                }
+            });
+        }
+
+        // Remove the crossing---once---from its component
+        this.components.forEach(c => {
+            let cai = c.indexOf(monoXi);
+            if (cai != -1) {
+                c.splice(cai, 1);
+            }
+        });
+
+        // Delete this face
+        this.faces.splice(fi, 1);
     }
 
     newVertIdx() {

@@ -88,7 +88,7 @@ class MeshDraw {
         let i = 0;
         //console.log(ld.verts, "!!");
         for (let [vi, vert] of ld.verts) {
-            break;
+            //break;
             if (vert === undefined) { continue; }
             //this.nodeG.circle(vert[0], vert[1], .25);
             if (this.nodes[i] === undefined) {
@@ -132,9 +132,8 @@ class MeshDraw {
             //console.log(ld.adjMap[ai]);
             if (ld.adjMap[ai].length != 2) {
                 // ai is a crossing
-                min_radii[ai] = Array.from(ld.verts.values()).reduce((r, p, pi) => ai==pi ? r : Math.min(r, norm(sub(a, p))), Infinity)/2;
-                //min_radii[ai] = Math.min(...ld.verts.map(
-                //    (b, bi) => bi == ai ? Infinity : norm(sub(a, b))))/2;
+                min_radii[ai] = vEArray.reduce((r, [pi, p]) => ai==pi ? r : Math.min(r, norm(sub(a, p))), Infinity)/2;
+                console.assert(min_radii[ai] != 0, min_radii, ai);
             } else {
                 // ai is an edge
                 let [bi, ci] = ld.adjMap[ai];
@@ -379,7 +378,6 @@ class MeshDraw {
                     p.strokeColor = "blue";
                     p.strokeWidth = 1;
                     p.strokeScaling = false;
-                    
                 }
                 //break;
             }
@@ -391,9 +389,12 @@ class MeshDraw {
             p.strokeScaling = false;
             p.onMouseEnter = function(e) {
                 this.fillColor.alpha = .5;
-            }
+            };
             p.onMouseLeave = function(e) {
                 this.fillColor.alpha = .2;
+            };
+            p.onClick = function(e) {
+                deleteMonogon(fi);
             }
             //p.fullySelected = true;
             //break;
@@ -426,6 +427,13 @@ function stepMapUpdate() {
     cpWorker.postMessage({
         function: "stepUpdate",
         arguments: []
+    });
+}
+
+function deleteMonogon(i) {
+    cpWorker.postMessage({
+        function: "deleteMonogon",
+        arguments: [i]
     });
 }
 

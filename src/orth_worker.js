@@ -119,8 +119,8 @@ var workerFunctions = {
         let thresh = 5e-10;
 
         let curDate;
-        self.n_steps = 100;//50;
-        let max_steps = 100;
+        self.n_steps = 50;//50;
+        let max_steps = 50;
 
         for (let i = 0; i < max_steps; i++) {
             let procStart = Date.now();
@@ -155,6 +155,12 @@ var workerFunctions = {
             function: "finalizeLinkDiagram",
             arguments: [self.force_shadow, self.force_shadow.faces, self.components]
         });
+    },
+
+    deleteMonogon: function(fi) {
+        self.force_shadow.deleteMonogon(fi);
+        self.force_shadow.initParams();
+        workerFunctions.embedDiagram();
     }
 }
 

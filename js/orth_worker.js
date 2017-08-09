@@ -33,9 +33,6 @@
 /******/ 	// expose the module cache
 /******/ 	__webpack_require__.c = installedModules;
 /******/
-/******/ 	// identity function for calling harmony imports with the correct context
-/******/ 	__webpack_require__.i = function(value) { return value; };
-/******/
 /******/ 	// define getter function for harmony exports
 /******/ 	__webpack_require__.d = function(exports, name, getter) {
 /******/ 		if(!__webpack_require__.o(exports, name)) {
@@ -63,7 +60,7 @@
 /******/ 	__webpack_require__.p = "";
 /******/
 /******/ 	// Load entry module and return exports
-/******/ 	return __webpack_require__(__webpack_require__.s = 7);
+/******/ 	return __webpack_require__(__webpack_require__.s = 2);
 /******/ })
 /************************************************************************/
 /******/ ([
@@ -691,10 +688,1041 @@ class DiGraph {
 
 
 /***/ }),
-/* 1 */
+/* 1 */,
+/* 2 */
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
+Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_0__lib_shadow_js__ = __webpack_require__(3);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__lib_orthemb_js__ = __webpack_require__(4);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_2__lib_forcediagram_js__ = __webpack_require__(6);
+importScripts('lalolib/lalolib.js');
+importScripts('lodash.min.js');
+
+importScripts('planarmap-em/libplanarmap-em.js');
+
+
+
+
+
+function sleep(millis)
+{
+    var date = new Date();
+    var curDate = null;
+    do { curDate = new Date(); }
+    while(curDate-date < millis);
+}
+
+self.randomDiagram = Module.cwrap('randomDiagram', 'number',
+                                  ['number', 'number', 'number', 'number', 'number', 'number']);
+
+function randomDiagram(n_verts, n_comps, max_att, type) {
+    /* Generate a random diagram using planarmap-emscripten */
+    
+    let vertPtr = Module._malloc(4);
+
+    let nVerts = self.randomDiagram(n_verts, n_comps, max_att, type,
+                                    Math.random()*2**32, vertPtr);
+    if (nVerts == 0) {
+        // No diagram was successfully sampled
+        Module._free(vertPtr);
+        return null;
+    }
+
+    let vertArray = Module.getValue(vertPtr, "i32*");
+
+    let view = Module.HEAP32.subarray(vertArray/4, vertArray/4+(4*nVerts));
+
+    let pd = [];
+    for (let vi = 0; vi < nVerts; vi++) {
+        let vert = [];
+        for (let pos = 0; pos < 4; pos++) {
+            vert.push(view[vi*4+pos]);
+        }
+        pd.push(vert);
+    }
+
+    Module._free(vertArray);
+    Module._free(vertPtr);
+
+    return pd;
+}
+
+var workerFunctions = {
+    setRandomLinkDiagram: function(n_verts, n_comps, max_att, type) {
+        let sigma = randomDiagram(n_verts, n_comps, max_att, type);
+        if (sigma == null) {
+            postMessage({
+                function: "raiseError",
+                arguments: ["A diagram was not sampled successfully"]
+            });
+            return;
+        }
+
+        postMessage({
+            function: "updatePDCode",
+            arguments: ["["+sigma.map(v => "["+v+"]")+"]"]
+        });
+        workerFunctions.setLinkDiagram(sigma);
+    },
+
+    setLinkDiagram: function(sigma, crossBend) {
+        self.shadow = new __WEBPACK_IMPORTED_MODULE_0__lib_shadow_js__["a" /* default */](sigma);
+        self.orthShadow = new __WEBPACK_IMPORTED_MODULE_1__lib_orthemb_js__["a" /* default */](self.shadow);
+
+        let rep = self.orthShadow.orthogonalRep();
+
+        let spec = self.orthShadow.orthogonalSpec();
+
+        let gridEmb = rep.basicGridEmbedding();
+
+        let verts = [];
+        for (let [i, vert] of gridEmb) {
+            verts[i] = vert;
+        }
+        
+        let edges = [];
+        for (let [source, sink, data] of rep.graph.edgeGen()) {
+            //console.log(data);
+            if (!rep.dummy.has(data)) {
+                edges.push([source, sink]);
+            }
+        }
+        let faces = rep.faces.map(f => f.evPairs.map(ev => ev[1]));
+        //faces.forEach(f => f.reverse());
+
+        self.components = self.orthShadow.components.map(c => c.map(a => a.vert));
+        self.faces = self.orthShadow.faces.map(f => {
+            let face = f.arcs.map(a => a.vert);
+            face.exterior = f.exterior;
+            face.degree = f.degree;
+            return face;
+        });
+        self.force_shadow = new __WEBPACK_IMPORTED_MODULE_2__lib_forcediagram_js__["a" /* default */](verts, edges, self.faces, self.components);
+        
+        //console.log(faces);
+        
+
+        postMessage({
+            function: "setLinkDiagram",
+            arguments: [self.force_shadow]
+        });
+
+        workerFunctions.embedDiagram();
+    },
+
+    embedDiagram: function() {
+        let tstart = Date.now();
+
+        let thresh = 5e-10;
+
+        let curDate;
+        self.n_steps = 50;//50;
+        let max_steps = 50;
+
+        for (let i = 0; i < max_steps; i++) {
+            let procStart = Date.now();
+            console.assert(!isNaN(self.force_shadow.aExp));
+            postMessage({
+                function: "setLinkDiagram",
+                arguments: [self.force_shadow]
+            });
+
+            self.force_shadow.update();
+            self.force_shadow.aExp -= (1 - 0.4)/self.n_steps;
+            self.force_shadow.erExp += (4 - 2)/self.n_steps;
+            self.force_shadow.dbar -= (3*self.force_shadow.delta)/self.n_steps;
+
+            //do { curDate = Date.now(); }
+            //while( curDate-procStart < 50);
+        }
+
+        postMessage({
+            function: "finalizeLinkDiagram",
+            arguments: [self.force_shadow, self.force_shadow.faces, self.components]
+        });
+    },
+
+    stepUpdate: function() {
+        self.force_shadow.update();
+        self.force_shadow.aExp -= (1 - 0.4)/self.n_steps;
+        self.force_shadow.reExp += (4 - 2)/self.n_steps;
+        self.force_shadow.dbar -= (3*self.force_shadow.delta)/self.n_steps;
+
+        postMessage({
+            function: "finalizeLinkDiagram",
+            arguments: [self.force_shadow, self.force_shadow.faces, self.components]
+        });
+    },
+
+    deleteMonogon: function(fi) {
+        self.force_shadow.deleteMonogon(fi);
+        self.force_shadow.initParams();
+        workerFunctions.embedDiagram();
+    }
+}
+
+onmessage = function(e) {
+    workerFunctions[e.data.function](...e.data.arguments);
+}
+
+
+/***/ }),
+/* 3 */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+class Arc {
+    constructor(index) {
+        this.index = index;
+    }
+
+    toString() {
+        return this.index.toString();
+    }
+
+    valueOf() {
+        return this.index;
+    }
+}
+
+class LinkShadow {
+    constructor(verts) {
+        this.nv = verts.length;
+        this.ne = this.nv*2;
+        this.na = this.nv*4;
+
+        this.arcs = [];
+        this.edges = [];
+        this.verts = [];
+
+        // Edge i is canonically of the form [2i, 2i+1]
+        for (let ei = 0; ei < this.ne; ei++) {
+            //console.log(ei);
+            this.newArc(2*ei);
+            this.newArc(2*ei+1);
+            //console.log(this.arcs)
+
+            this.setEdge(ei, [2*ei, 2*ei+1]);
+        }
+
+        // Set verts by looking through verts
+        for (let vi in verts) {
+            this.setVert(vi, verts[vi]);
+        }
+
+        this.generateFaces();
+        this.generateComponents();
+        this.connectArcs();
+    }
+
+    copy() {
+        let link = new LinkShadow(this.verts.map(
+            v => v.map(a => a.index)
+        ));
+
+        return link;
+    }
+
+    generateFaces() {
+        let leftArcs = new Set(this.arcs);
+        this.faces = [];
+
+        while(leftArcs.size > 0) {
+            let startArc = Array.from(leftArcs).pop();
+
+            let face = [];
+            let arc = startArc;
+            let _failsafe = 0;
+            do {
+                leftArcs.delete(arc);
+                face.push(arc);
+                arc.face = this.faces.length;
+                //console.log(arc);
+
+                let oArc = this.edges[arc.edge][(arc.edgepos+1)%2];
+                arc = this.verts[oArc.vert][(oArc.vertpos+1)%4];
+                //console.log(arc);
+                _failsafe += 1;
+                if (_failsafe > 500) {
+                    console.log("Failure");
+                    return this.faces;
+                }
+            } while (arc != startArc)
+
+            //face.reverse();
+            this.faces.push(face);
+        }
+        return this.faces;
+    }
+
+    generateComponents(oneOrient=true) {
+        let leftArcs = new Set(this.arcs);
+
+        this.components = [];
+        while (leftArcs.size > 0) {
+            let startArc = Array.from(leftArcs).pop();
+
+            let component = this.component(startArc);
+            for (let arc of component) {
+                leftArcs.delete(arc);
+                if (oneOrient) {
+                    // Delete the other arc edge-opposite this one
+                    leftArcs.delete(this.edges[arc.edge][(arc.edgepos+1)%2]);
+                }
+            }
+
+            this.components.push(component);
+        }
+        return this.components;
+    }
+
+    component(arc) {
+        let startArc = arc;
+
+        let component = [];
+        do {
+            component.push(arc);
+
+            let oArc = this.edges[arc.edge][(arc.edgepos+1)%2];
+            arc = this.verts[oArc.vert][(oArc.vertpos+2)%4];
+        } while (arc != startArc)
+
+        return component;
+    }
+
+    outVertI(arc) {
+        return arc.vert;
+    }
+
+    inVertI(arc) {
+        return this.edgeOpposite(arc).vert;
+    }
+
+    edgeOpposite(arc) {
+        return this.edges[arc.edge][(arc.edgepos+1)%2];
+    }
+    vertNext(arc) {
+        return this.verts[arc.vert][(arc.vertpos+1)%4];
+    }
+    vertPrev(arc) {
+        return this.verts[arc.vert][(arc.vertpos+3)%4];
+    }
+    vertOppo(arc) {
+        return this.verts[arc.vert][(arc.vertpos+2)%4];
+    }
+
+    newArc(idx) {
+        if (idx === undefined) { idx = this.arcs.length; }
+
+        this.arcs[idx] = new Arc(idx);
+        // {index: idx, edge:undefined, edgepos:undefined, vert:undefined, vertpos:undefined};
+        return this.arcs[idx];
+    }
+
+    connectArcs() {
+        /* Hook up the arcs so they know, locally, their linkings */
+
+        for (let arc of this.arcs) {
+            arc.edgeOpposite = this.edgeOpposite(arc);
+            arc.vertNext = this.vertNext(arc);
+            arc.vertPrev = this.vertPrev(arc);
+            arc.vertOppo = this.vertOppo(arc);
+        }
+    }
+
+    setEdge(idx, ais) {
+        this.edges[idx] = ais.map((ai) => {return this.arcs[ai];}, this);
+
+        for (let i in ais) {
+            this.arcs[ais[i]].edge = idx;
+            this.arcs[ais[i]].edgepos = parseInt(i);
+        }
+    }
+
+    setVert(idx, ais) {
+        this.verts[idx] = ais.map((ai) => {return this.arcs[ai];}, this);
+
+        for (let i in ais) {
+            if (ais[i] === undefined) { continue; }
+
+            this.arcs[ais[i]].vert = parseInt(idx);
+            this.arcs[ais[i]].vertpos = parseInt(i);
+        }
+    }
+}
+/* harmony export (immutable) */ __webpack_exports__["a"] = LinkShadow;
+
+
+
+/***/ }),
+/* 4 */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_0__digraph_js__ = __webpack_require__(0);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__orthrep_js__ = __webpack_require__(5);
+
+
+
+class Face {
+    constructor (link, arcs, exterior=false) {
+        this.link = link;
+        this.arcs = arcs;
+        this.exterior = exterior;
+
+        // Real degree, i.e. the number of 4-valent vertices around this face
+        this.degree = this.arcs.length;
+
+        // Real crossings around this face, as opposed to joints
+        this.cross = this.arcs.map(a => a.vert);
+
+        // this.edges is array of [arc1index, arc2index] around the face
+        // this.edges = this.arcs.map(a => this.link.edges[a.edge].map(b => b.index));
+        this.edges = this.arcs.map(a => a.edge);
+        this.edgeMap = []; for (let arc of this.arcs) { this.edgeMap[arc.edge] = arc; }
+
+        this.turns = this.arcs.map(a => 1);
+
+    }
+
+    edgeOfIntersection(other) {
+        let commonEdges = this.edges.filter(e => other.edges.some(oe => e == oe));
+        if (commonEdges.length > 0) {
+            let e = commonEdges.pop();
+            return [this.edgeMap[e], other.edgeMap[e]];
+        }
+        return null;
+    }
+
+    sourceCapacity() {
+        return (this.exterior ? 0 :
+                Math.max(4 - this.arcs.length, 0));
+    }
+
+    sinkCapacity() {
+        return (this.exterior ? this.arcs.length + 4 :
+                Math.max(this.arcs.length - 4, 0));
+    }
+
+    bend(arc, turns) {
+        let i = this.arcs.indexOf(arc);
+        //turns.reverse();
+
+        for (let t of turns) {
+            arc = arc.edgeOpposite.vertNext;
+            //arc = arc.vertPrev.edgeOpposite;
+            this.arcs.splice(i+1, 0, arc);
+            this.turns.splice(i+1, 0, t);
+            i += 1;
+        }
+    }
+
+    *iterateFrom(arc) {
+        let ai = this.arcs.indexOf(arc);
+        for (let i = ai+1; i < this.arcs.length; i++) {
+            yield [this.arcs[i], this.turns[i]];
+        }
+        for (let i = 0; i < ai+1; i++) {
+            yield [this.arcs[i], this.turns[i]];
+        }
+    }
+
+    orientEdges(arc, orientation) {
+        const dirs = ["left", "up", "right", "down"];
+        console.assert(this.isValid(), this);
+        let dir = dirs.indexOf(orientation);
+        let ans = new Map();
+        for (let [a, t] of this.iterateFrom(arc)) {
+            dir = (dir+t+4)%4;
+            ans.set(a.index, dirs[dir]);
+            ans.set(a.edgeOpposite.index, dirs[(dir+2)%4]);
+        }
+        return ans;
+    }
+
+    isValid() {
+        let face = [];
+        let start = this.arcs[0];
+        let arc = start;
+        while (!face.includes(arc.index)) {
+            face.push(arc.index);
+            arc = arc.edgeOpposite.vertNext;
+        }
+
+        return this.arcs.reduce((val, a, i) => val && (a.index == face[i]), true);
+    }
+
+}
+
+class OrthogonalDiagramEmbedding {
+    constructor (shadow) {
+        this.shadow = shadow.copy();
+
+        this.faces = this.shadow.faces.map(f => new Face(this.shadow, f));
+        let F = this.faces.reduce(
+            (bigF, f) => (bigF.arcs.length >= f.arcs.length) ? bigF : f);
+        F.exterior = true;
+
+        this.faceNetwork = this.flowNetwork();
+        this.bend();
+        this.orientEdges();
+
+        this.edges = this.faces.reduce((all, f) => all.concat(f.arcs), []);
+        this.repairComponents();
+    }
+
+    flowNetwork() {
+        let G = new __WEBPACK_IMPORTED_MODULE_0__digraph_js__["a" /* default */]();
+
+        let sourceDemand = this.faces.reduce(
+            (tot, f) => (tot + f.sourceCapacity()), 0);
+        G.addNode('s', {demand: -sourceDemand});
+        for (let fi = 0; fi < this.faces.length; fi++) {
+            let sourceCapacity = this.faces[fi].sourceCapacity();
+            if (sourceCapacity > 0) {
+                G.addEdge('s', fi, {weight: 0, capacity: sourceCapacity});
+            }
+        }
+
+        let sinkDemand = this.faces.reduce(
+            (tot, f) => (tot + f.sinkCapacity()), 0);
+        G.addNode('t', {demand: sinkDemand});
+        for (let fi = 0; fi < this.faces.length; fi++) {
+            let sinkCapacity = this.faces[fi].sinkCapacity();
+            if (sinkCapacity > 0) {
+                G.addEdge(fi, 't', {weight: 0, capacity: sinkCapacity});
+            }
+        }
+
+        for (let ai = 0; ai < this.faces.length; ai++) {
+            for (let bi = 0; bi < this.faces.length; bi++) {
+                if (ai != bi &&
+                    this.faces[ai].edgeOfIntersection(this.faces[bi]) != null) {
+                    G.addEdge(ai, bi, {weight: 1});
+                }
+            }
+        }
+
+        return G;
+    }
+
+    bend() {
+        let flow = this.faceNetwork.minCostFlow()[1];
+
+        for (let [a, flows] of flow) {
+            for (let [b, w_a] of flows) {
+                //console.log(a, b, w_a);
+                if (!w_a || a == 's' || b == 's' || a == 't' || b == 't') {
+                    continue;
+                }
+
+                let w_b = flow.get(b).get(a);
+
+                let [A, B] = [this.faces[a], this.faces[b]];
+                let [arc_ai, arc_bi] = A.edgeOfIntersection(B);
+
+                let arc_a = this.shadow.arcs[arc_ai];
+                let arc_b = this.shadow.arcs[arc_bi];
+
+                let turnsA = (new Array(w_a).fill(1)).concat(
+                    (new Array(w_b).fill(-1)));
+                let turnsB = (new Array(w_b).fill(1)).concat(
+                    (new Array(w_a).fill(-1)));
+
+                this.subdivideEdge(arc_a, turnsA.length);
+
+                A.bend(arc_a, turnsA);
+                B.bend(arc_b, turnsB);
+            }
+        }
+    }
+
+    subdivideEdge(arc, n) {
+        let head = arc;
+        let tail;
+        let backwards = !this.shadow.components.some(c => c.includes(arc));
+        if (backwards) {
+            tail = head;
+            head = tail.edgeOpposite;
+        } else {
+            tail = head.edgeOpposite;
+        }
+
+        let strands = (new Array(2*n).fill(0)).map(i => this.shadow.newArc());
+        strands.splice(0, 0, head);
+        strands.push(tail);
+
+        // Glue edges
+        for (let si = 0; si < strands.length; si += 2) {
+            strands[si].edgeOpposite = strands[si+1];
+            strands[si+1].edgeOpposite = strands[si];
+
+            this.shadow.setEdge(this.shadow.edges.length,
+                                [strands[si].index, strands[si+1].index]);
+        }
+
+        // Glue degree 2 joints
+        for (let si = 1; si < strands.length-1; si += 2) {
+            strands[si].vertNext = strands[si+1];
+            strands[si].vertPrev = strands[si+1];
+            strands[si].vertOppo = strands[si+1];
+
+            strands[si+1].vertNext = strands[si];
+            strands[si+1].vertPrev = strands[si];
+            strands[si+1].vertOppo = strands[si];
+
+            this.shadow.setVert(this.shadow.verts.length,
+                                [strands[si].index, undefined, strands[si+1].index, undefined]);
+        }
+    }
+
+    repairComponents() {
+        this.arcComponentMap = new Map();
+        this.orderedArcs = [];
+        this.components = [];
+
+        for (let i = 0; i < this.shadow.components.length; i++) {
+            for (let arc of this.shadow.components[i]) {
+                this.arcComponentMap.set(arc.index, i);
+                this.orderedArcs.push(arc);
+            }
+
+            let comp_root_a = this.shadow.components[i][0];
+            let arc = comp_root_a;
+            let component = [];
+            do {
+                component.push(arc);
+                arc = arc.vertOppo.edgeOpposite;
+            } while (arc.index != comp_root_a.index)
+            this.components.push(component);
+        }
+    }
+
+    orientEdges() {
+        let orientations = [];
+        orientations[this.faces[0].arcs[0].index] = 'right';
+
+        let G = this.faceNetwork.copy();
+        G.removeNode('s');
+        G.removeNode('t');
+
+        for (let node of G.depthFirstSearch(0)) {
+            let F = this.faces[node];
+            for (let arc of F.arcs) {
+                if (arc.index in orientations) {
+                    let newOrientations = F.orientEdges(
+                        arc, orientations[arc.index]);
+                    for (let [a, dir] of newOrientations) {
+                        if (a in orientations) {
+                            console.assert(orientations[a] == dir, orientations, a, dir);
+                        } else {
+                            orientations[a] = dir;
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+
+        //console.assert(orientations.length, orientations);
+        this.orientations = orientations;
+    }
+
+    orthogonalSpec() {
+        return ['right', 'up'].map(
+            dir => this.edges.filter(a => this.orientations[a.index] == dir).map(
+                a => [a.vert, a.edgeOpposite.vert] // TODO
+            ));
+    }
+
+    orthogonalRep() {
+        return new __WEBPACK_IMPORTED_MODULE_1__orthrep_js__["a" /* default */](...this.orthogonalSpec());
+    }
+}
+/* harmony export (immutable) */ __webpack_exports__["a"] = OrthogonalDiagramEmbedding;
+
+
+
+/***/ }),
+/* 5 */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_0__digraph_js__ = __webpack_require__(0);
+
+
+function partialSums(L) {
+    let ans = [0];
+    for (let x of L) {
+        ans.push(ans[ans.length-1] + x);
+    }
+    return ans;
+}
+
+function elementMap(part) {
+    let ans = [];
+    for (let p of part) {
+        for (let x of p) {
+            ans[x] = p;
+        }
+    }
+    return ans;
+}
+
+function basicTopologicalNumbering(G) {
+    let inValences = new Map();
+    G.nodes.forEach(
+        (data, v) => inValences.set(v, G.indegree(v)));
+
+    let numbering = [];
+
+    let currSources = [];
+    for (let [v, deg] of inValences) {
+        if (deg == 0) { currSources.push(v); }
+    }
+
+    let currNumber = 0;
+
+    while (inValences.size > 0) {
+        let newSources = [];
+        for (let v of currSources) {
+            inValences.delete(v);
+            numbering[v] = currNumber;
+
+            for (let e of G.outgoing(v)) {
+                let w = e.sink;
+                inValences.set(w, inValences.get(w) - 1);
+                if (inValences.get(w) == 0) {
+                    newSources.push(w);
+                }
+            }
+            currSources = newSources;
+        }
+        currNumber += 1;
+    }
+
+    return numbering;
+}
+
+function topologicalNumbering(G) {
+    let n = basicTopologicalNumbering(G);
+    let success = true;
+
+    while (success) {
+        success = false;
+        for (let [v, d] of G.nodes) {
+            let below = G.incoming(v).filter(e => e.dummy == false).length;
+            let above = G.outgoing(v).filter(e => e.dummy == false).length;
+
+            if (above != below) {
+                let newPos;
+                if (above > below) {
+                    newPos = Math.min(...G.outgoing(v).map(e => n[e.sink])) - 1;
+                } else {
+                    newPos = Math.max(...G.incoming(v).map(e => n[e.source])) + 1;
+                }
+
+                if (newPos != n[v]) {
+                    n[v] = newPos;
+                    success = true;
+                }
+            }
+        }
+    }
+
+    return n;
+}
+
+function kittyCorner(turns) {
+    let rotations = partialSums(turns);
+    //let reflexCorners = turns.filter(t => t == -1).map((t, i) => i);
+    let reflexCorners = turns.map((t, i) => i).filter(i => turns[i] == -1);
+
+    for (let r0 of reflexCorners) {
+        for (let r1 of reflexCorners.filter(r => r > r0)) {
+            if (rotations[r1] - rotations[r0] == 2) {
+                return [r0, r1];
+            }
+        }
+    }
+    return null;
+}
+
+class OrthogonalFace {
+    constructor(graph, edgeAndVert) {
+        let [edge, vertex] = edgeAndVert;
+        this.evPairs = [];
+        this.evPairs.push(edgeAndVert);
+
+        while (true) {
+            [edge, vertex] = this.evPairs[this.evPairs.length-1];
+            edge = graph.nextEdgeAtVertex(edge, vertex);
+            vertex = (vertex === edge.source) ? edge.sink : edge.source;
+            if (this.evPairs[0][0] == edge && this.evPairs[0][1] == vertex) {
+                break;
+            } else {
+                this.evPairs.push([edge, vertex]);
+            }
+        }
+
+        this.addTurns();
+    }
+
+    addTurns() {
+        this.turns = [];
+        for (let i = 0; i < this.evPairs.length; i++) {
+            let [e0, v0] = this.evPairs[i];
+            let [e1, v1] = this.evPairs[(i+1)%this.evPairs.length];
+
+            if (e0.kind == e1.kind) {
+                this.turns.push(0);
+            } else {
+                let t = (e0.source == v0) ^ (e1.sink == v0) ^ (e0.kind == 'horizontal');
+                this.turns.push(t ? -1 : 1);
+            }
+        }
+
+        let rotation = this.turns.reduce((s, x) => s+x);
+        console.assert( Math.abs(rotation) == 4, rotation );
+        this.exterior = (rotation == -4);
+    }
+
+    kittyCorner() {
+        if (!this.exterior) {
+            return kittyCorner(this.turns);
+        }
+        return null;
+    }
+
+    isTurnRegular() {
+        return this.kittyCorner() === null;
+    }
+
+    switches(swap) {
+        function edgeToEndpoints(e) {
+            if (swap && e.kind == 'horizontal') {
+                return [e.sink, e.source];
+            }
+            return [e.source, e.sink];
+        }
+
+        let ans = [];
+        for (let i = 0; i < this.evPairs.length; i++) {
+            let [e0, v0] = this.evPairs[i];
+            let [t0, h0] = edgeToEndpoints(e0);
+            let [t1, h1] = edgeToEndpoints(this.evPairs[(i+1)%this.evPairs.length][0]);
+
+            if (t0 == t1 && t1 == v0) {
+                ans.push({index: i, kind: 'source', turn: this.turns[i]});
+            } else if (h0 == h1 && h1 == v0) {
+                ans.push({index: i, kind: 'sink', turn: this.turns[i]});
+            }
+        }
+
+        return ans;
+    }
+
+    saturationEdges(swap) {
+        function saturateFace(faceInfo) {
+            for (let i = 0; i < faceInfo.length; i++) {
+                if (faceInfo[i].turn == -1) {
+                    faceInfo = faceInfo.slice(i).concat(faceInfo.slice(0, i));
+                    break;
+                }
+            }
+
+            for (let i = 0; i < faceInfo.length-2; i++) {
+                let [x, y, z] = faceInfo.slice(i, i+3);
+                if (x.turn == -1 && y.turn == z.turn && z.turn == 1) {
+                    let [a, b] = x.kind == 'sink' ? [x, z] : [z, x];
+                    let remaining = faceInfo.slice(0, i)
+                        .concat([{index: z.index, kind: z.kind, turn: 1}])
+                        .concat(faceInfo.slice(i+3));
+                    return [[a.index, b.index]].concat(saturateFace(remaining));
+                }
+            }
+            return [];
+        }
+
+        let newEdges = saturateFace(this.switches(swap));
+        return newEdges.map(([a,b]) => [this.evPairs[a][1], this.evPairs[b][1]]);
+    }
+}
+
+class OrthogonalRep {
+    constructor(horiz_pairs, vert_pairs) {
+        this.graph = new __WEBPACK_IMPORTED_MODULE_0__digraph_js__["a" /* default */]();
+        this.nedges = 0;
+        for (let [a, b] of horiz_pairs) {
+            this.graph.addEdge(a, b, {kind: "horizontal", index: this.nedges++});
+        }
+        for (let [a, b] of vert_pairs) {
+            this.graph.addEdge(a, b, {kind: "vertical", index: this.nedges++});
+        }
+
+        this.buildFaces();
+        this.makeTurnRegular();
+    }
+
+    buildFaces() {
+        this.faces = [];
+        let unseen = new Map();
+        for (let [source, sink, data] of this.graph.edgeGen()) {
+            if (!unseen.has(data.index)) { unseen.set(data.index, new Map()); }
+            unseen.get(data.index).set(source, data);
+            unseen.get(data.index).set(sink, data);
+        }
+
+        while (unseen.size > 0) {
+            let [vert, edge] = unseen.values().next().value.entries().next().value;
+            unseen.get(edge.index).delete(vert);
+            if (unseen.get(edge.index).size <= 0) { unseen.delete(edge.index); }
+
+            let face = new OrthogonalFace(this, [edge, vert]);
+            face.evPairs.forEach(
+                x => {
+                    let [edge, vert] = x;
+                    if (unseen.has(edge.index)) {
+                        unseen.get(edge.index).delete(vert);
+                        if (unseen.get(edge.index).size <= 0) {
+                            unseen.delete(edge.index);
+                        }
+                    }
+                });
+            this.faces.push(face);
+        }
+    }
+
+    link(vert) {
+        let link = this.graph.incidentEdges(vert);
+        function score(e) {
+            return (e.source == vert)*2 + (e.kind == 'vertical');
+        }
+        link.sort((a, b) => score(a) > score(b));
+        return link;
+    }
+
+    nextEdgeAtVertex(edge, vert) {
+        let link = this.link(vert);
+        return link[ (link.indexOf(edge)+1) % link.length ];
+    }
+
+    makeTurnRegular() {
+        let dummy = new Set();
+        let regular = this.faces.filter(F => F.isTurnRegular());
+        let irregular = this.faces.filter(F => !F.isTurnRegular());
+
+        let ell = 0;
+        while (irregular.length > 0) {
+            let F = irregular.pop();
+            let [i, j] = F.kittyCorner();
+            let [v0, v1] = [F.evPairs[i][1], F.evPairs[j][1]];
+
+            let kind = ['vertical', 'horizontal'][ell%2];
+            let e;
+            if (this.graph.incoming(v0).some(e => e.kind == kind)) {
+                e = this.graph.addEdge(v0, v1, {kind: kind, index: this.nedges++});
+            } else {
+                e = this.graph.addEdge(v1, v0, {kind: kind, index: this.nedges++});
+            }
+            dummy.add(e);
+
+            for (let v of [v0, v1]) {
+                F = new OrthogonalFace(this, [e, v]);
+                if (F.isTurnRegular()) {
+                    regular.push(F);
+                } else {
+                    irregular.push(F);
+                }
+            }
+
+            ell++;
+        }
+
+        [this.faces, this.dummy] = [regular, dummy];
+    }
+
+    saturationEdges(swap) {
+        return this.faces.reduce(
+            (arr, f) => arr.concat(f.saturationEdges(swap)), []);
+    }
+
+    dagFromDirection(kind) {
+        let H = new __WEBPACK_IMPORTED_MODULE_0__digraph_js__["a" /* default */]();
+        this.graph.nodes.forEach((data, v) =>
+                                 H.addNode(v));
+        for (let [source, sink, data] of this.graph.edgeGen()) {
+            if (data.kind == kind) { H.addEdge(source, sink); }
+        }
+
+        let maximalChains = H.weakComponents();
+        let vertexToChain = elementMap(maximalChains);
+
+        let D = new __WEBPACK_IMPORTED_MODULE_0__digraph_js__["a" /* default */]();
+        maximalChains.forEach((c, i) => D.addNode(c));
+
+        for (let [source, sink, data] of this.graph.edgeGen()) {
+            if (data.kind != kind) {
+                let d = D.addEdge(vertexToChain[source], vertexToChain[sink]);
+                d.dummy = (this.dummy.has(data));
+            }
+        }
+
+        for (let [u, v] of this.saturationEdges(false)) {
+            let d = D.addEdge(vertexToChain[u], vertexToChain[v]);
+            d.dummy = true;
+       }
+        for (let [u, v] of this.saturationEdges(true)) {
+            if (kind == 'vertical') {
+                let t = u;
+                u = v;
+                v = t;
+            }
+
+            let d = D.addEdge(vertexToChain[u], vertexToChain[v]);
+            d.dummy = true;
+        }
+
+        D.vertexToChain = vertexToChain;
+        return D;
+    }
+
+    chainCoordinates(kind) {
+        let D = this.dagFromDirection(kind);
+        let chainCoords = topologicalNumbering(D);
+
+        let coords = new Map();
+        this.graph.nodes.forEach((data, v) =>
+                                 coords.set(v, chainCoords[D.vertexToChain[v]]));
+        return coords;
+    }
+
+    basicGridEmbedding() {
+        let V = this.chainCoordinates('horizontal');
+        let H = this.chainCoordinates('vertical');
+
+        let emb = new Map();
+        this.graph.nodes.forEach((data, v) => emb.set(v, [H.get(v), V.get(v)]));
+        return emb;
+    }
+}
+/* harmony export (immutable) */ __webpack_exports__["a"] = OrthogonalRep;
+
+
+
+/***/ }),
+/* 6 */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_0__Quadtree_es6_quadtree_js__ = __webpack_require__(10);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__Quadtree_es6_math_point_js__ = __webpack_require__(9);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_2__Quadtree_es6_math_quad_js__ = __webpack_require__(11);
+
+
+
 
 class ForceLinkDiagram {
     /* Link diagram embedding improved by ImPrEd */
@@ -777,6 +1805,13 @@ class ForceLinkDiagram {
             this.paths.push(path);
         }
 
+        this.initParams();
+        this.calculateSurroundingEdges();
+
+        this._cacheDistances;
+    }
+
+    initParams() {
         this.delta = 2;
         this.gamma = 5;
 
@@ -790,11 +1825,146 @@ class ForceLinkDiagram {
         this.aExp = 1;
         this.erExp = 2;
 
-        this.calculateSurroundingEdges();
-
         this.numIter = 0;
+    }
 
-        this._cacheDistances;
+    deleteVertex(vi) {
+        /* Deletes a vert, breaking paths, components, and faces (you must fix) */
+        this.verts.delete(vi);
+        delete this.adjMap[vi];
+        delete this.edgeMatrix[vi];
+        this.surrEdges.delete(vi);
+        this.freeVi.push(vi);
+
+        // Delete this vertex from any faces it is in
+    }
+
+    deleteEdge(edge) {
+        /* Deletes an edge, breaking paths, components, and faces (you must fix) */
+
+        let [ai, bi] = edge;
+
+        // Delete this edge from the matrix
+        delete this.edgeMatrix[ai][bi];
+        delete this.edgeMatrix[bi][ai];
+
+        // Remove from edges
+        this.edges.splice(this.edges.indexOf(edge), 1);
+
+        // ai is no longer adjacent to bi
+        this.adjMap[ai].splice(this.adjMap[ai].indexOf(bi), 1);
+        this.adjMap[bi].splice(this.adjMap[bi].indexOf(ai), 1);
+
+        // Update surrEdges; faces is potentially broken after this op
+        for (let f of this.faces) {
+            // check if this edge is in this face
+            let fi = f.findIndex((v, i, f) => f[i]==ai && f[(i+1)%f.length]==bi);
+            if (fi == -1) {
+                fi = f.findIndex((v, i, f) => f[i]==bi && f[(i+1)%f.length]==ai);
+            }
+            if (fi == -1) { continue; }
+
+            // Update surrEdges for vertices in f which AREN'T vi
+            for (let ui of f) {
+                if (this.surrEdges.has(ui))
+                    this.surrEdges.get(ui).delete(edge);
+            }
+        }
+    }
+
+    deleteMonogon(fi) {
+        let delFace = this.faces[fi].slice(); // copy of face to delete
+        let monoXi; // The unique crossing vertex index in this monogon
+        let monoPi; // The unique path which consists of this loop, to delete
+
+        monoXi = delFace.find(vi => this.adjMap[vi].length == 4);
+
+        for (let i = 0; i < delFace.length; i++) {
+            let ai, bi;
+            if (i == delFace.length-1) {
+                [ai, bi] = [delFace[i], delFace[0]];
+            } else {
+                [ai, bi] = delFace.slice(i, i+2);
+            }
+            let delEdge = this.edgeMatrix[ai][bi];
+
+            // Delete edge ai->bi
+            this.deleteEdge(delEdge);
+        }
+
+        for (let ai of delFace) {
+            if (!this.adjMap[ai].length) {
+                // Vertex ai is stranded, delete it
+                this.deleteVertex(ai);
+
+                // Find the path for this monogon, to delete later
+                if (monoPi === undefined) {
+                    monoPi = this.paths.findIndex(p => p.includes(ai));
+                }
+
+                // Remove ai from its component
+                this.components.forEach(c => {
+                    let cai = c.indexOf(ai);
+                    if (cai != -1) {
+                        c.splice(cai, 1);
+                    }
+                });
+            }
+        }
+
+        // Delete this path
+        this.paths.splice(monoPi, 1);
+
+        // monoXi is in two paths; we want to combine them.
+        let path1_i = this.paths.findIndex(p => p.includes(monoXi));
+        let path2_i = path1_i+1 + this.paths.slice(path1_i+1).findIndex(p => p.includes(monoXi));
+        let [p1, p2] = [this.paths[path1_i], this.paths[path2_i]];
+        let x_p1i = p1.indexOf(monoXi); // either 0 or length-1
+        if (x_p1i == 0) { p1.reverse(); } // crossing is now at end of p1
+        if (p1.indexOf(monoXi) == 0) {
+            // edge case--self loop edge (impossible) or
+            // (actual) -> single twist diagram is being untwisted
+            // sufficient to just remove path2
+            this.paths.splice(path2_i, 1);
+            
+        } else {
+
+            let x_p2i = p2.indexOf(monoXi); // either 0 or length-1
+            if (x_p2i != 0) { p2.reverse(); } // crossing is not at front of p2
+
+            // remove paths from this.paths
+            this.paths.splice(path2_i, 1);
+            this.paths.splice(path1_i, 1);
+
+            this.paths.push(p1.concat(p2.slice(1)));
+
+        }
+
+        for (let vi of delFace) {
+            this.faces.forEach(f => {
+                let fai = f.indexOf(vi);
+                if (fai != -1) {
+                    if (vi == monoXi) {
+                        fai = f.indexOf(vi, fai+1);
+                        if (fai == -1) {
+                            return;
+                        }
+                    }
+                    f.splice(fai, 1);
+                }
+            });
+        }
+
+        // Remove the crossing---once---from its component
+        this.components.forEach(c => {
+            let cai = c.indexOf(monoXi);
+            if (cai != -1) {
+                c.splice(cai, 1);
+            }
+        });
+
+        // Delete this face
+        this.faces.splice(fi, 1);
     }
 
     newVertIdx() {
@@ -1297,1023 +2467,238 @@ class ForceLinkDiagram {
 
 
 /***/ }),
-/* 2 */
+/* 7 */,
+/* 8 */,
+/* 9 */
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_0__digraph_js__ = __webpack_require__(0);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__orthrep_js__ = __webpack_require__(6);
+class Point {
 
-
-
-class Face {
-    constructor (link, arcs, exterior=false) {
-        this.link = link;
-        this.arcs = arcs;
-        this.exterior = exterior;
-
-        // Real degree, i.e. the number of 4-valent vertices around this face
-        this.degree = this.arcs.length;
-
-        // Real crossings around this face, as opposed to joints
-        this.cross = this.arcs.map(a => a.vert);
-
-        // this.edges is array of [arc1index, arc2index] around the face
-        // this.edges = this.arcs.map(a => this.link.edges[a.edge].map(b => b.index));
-        this.edges = this.arcs.map(a => a.edge);
-        this.edgeMap = []; for (let arc of this.arcs) { this.edgeMap[arc.edge] = arc; }
-
-        this.turns = this.arcs.map(a => 1);
-
+    constructor(x, y){
+        this.x = x;
+        this.y = y;
     }
 
-    edgeOfIntersection(other) {
-        let commonEdges = this.edges.filter(e => other.edges.some(oe => e == oe));
-        if (commonEdges.length > 0) {
-            let e = commonEdges.pop();
-            return [this.edgeMap[e], other.edgeMap[e]];
-        }
-        return null;
+    getPosition() {
+        return {
+            x: this.x,
+            y: this.y
+        };
     }
 
-    sourceCapacity() {
-        return (this.exterior ? 0 :
-                Math.max(4 - this.arcs.length, 0));
+    increaseX(amount) {
+        this.x += amount;
     }
 
-    sinkCapacity() {
-        return (this.exterior ? this.arcs.length + 4 :
-                Math.max(this.arcs.length - 4, 0));
+    decreaseX(amount) {
+        this.x -= amount;
     }
 
-    bend(arc, turns) {
-        let i = this.arcs.indexOf(arc);
-        //turns.reverse();
-
-        for (let t of turns) {
-            arc = arc.edgeOpposite.vertNext;
-            //arc = arc.vertPrev.edgeOpposite;
-            this.arcs.splice(i+1, 0, arc);
-            this.turns.splice(i+1, 0, t);
-            i += 1;
-        }
+    increaseY(amount) {
+        this.y += amount;
     }
 
-    *iterateFrom(arc) {
-        let ai = this.arcs.indexOf(arc);
-        for (let i = ai+1; i < this.arcs.length; i++) {
-            yield [this.arcs[i], this.turns[i]];
-        }
-        for (let i = 0; i < ai+1; i++) {
-            yield [this.arcs[i], this.turns[i]];
-        }
-    }
-
-    orientEdges(arc, orientation) {
-        const dirs = ["left", "up", "right", "down"];
-        console.assert(this.isValid(), this);
-        let dir = dirs.indexOf(orientation);
-        let ans = new Map();
-        for (let [a, t] of this.iterateFrom(arc)) {
-            dir = (dir+t+4)%4;
-            ans.set(a.index, dirs[dir]);
-            ans.set(a.edgeOpposite.index, dirs[(dir+2)%4]);
-        }
-        return ans;
-    }
-
-    isValid() {
-        let face = [];
-        let start = this.arcs[0];
-        let arc = start;
-        while (!face.includes(arc.index)) {
-            face.push(arc.index);
-            arc = arc.edgeOpposite.vertNext;
-        }
-
-        return this.arcs.reduce((val, a, i) => val && (a.index == face[i]), true);
-    }
-
-}
-
-class OrthogonalDiagramEmbedding {
-    constructor (shadow) {
-        this.shadow = shadow.copy();
-
-        this.faces = this.shadow.faces.map(f => new Face(this.shadow, f));
-        let F = this.faces.reduce(
-            (bigF, f) => (bigF.arcs.length >= f.arcs.length) ? bigF : f);
-        F.exterior = true;
-
-        this.faceNetwork = this.flowNetwork();
-        this.bend();
-        this.orientEdges();
-
-        this.edges = this.faces.reduce((all, f) => all.concat(f.arcs), []);
-        this.repairComponents();
-    }
-
-    flowNetwork() {
-        let G = new __WEBPACK_IMPORTED_MODULE_0__digraph_js__["a" /* default */]();
-
-        let sourceDemand = this.faces.reduce(
-            (tot, f) => (tot + f.sourceCapacity()), 0);
-        G.addNode('s', {demand: -sourceDemand});
-        for (let fi = 0; fi < this.faces.length; fi++) {
-            let sourceCapacity = this.faces[fi].sourceCapacity();
-            if (sourceCapacity > 0) {
-                G.addEdge('s', fi, {weight: 0, capacity: sourceCapacity});
-            }
-        }
-
-        let sinkDemand = this.faces.reduce(
-            (tot, f) => (tot + f.sinkCapacity()), 0);
-        G.addNode('t', {demand: sinkDemand});
-        for (let fi = 0; fi < this.faces.length; fi++) {
-            let sinkCapacity = this.faces[fi].sinkCapacity();
-            if (sinkCapacity > 0) {
-                G.addEdge(fi, 't', {weight: 0, capacity: sinkCapacity});
-            }
-        }
-
-        for (let ai = 0; ai < this.faces.length; ai++) {
-            for (let bi = 0; bi < this.faces.length; bi++) {
-                if (ai != bi &&
-                    this.faces[ai].edgeOfIntersection(this.faces[bi]) != null) {
-                    G.addEdge(ai, bi, {weight: 1});
-                }
-            }
-        }
-
-        return G;
-    }
-
-    bend() {
-        let flow = this.faceNetwork.minCostFlow()[1];
-
-        for (let [a, flows] of flow) {
-            for (let [b, w_a] of flows) {
-                //console.log(a, b, w_a);
-                if (!w_a || a == 's' || b == 's' || a == 't' || b == 't') {
-                    continue;
-                }
-
-                let w_b = flow.get(b).get(a);
-
-                let [A, B] = [this.faces[a], this.faces[b]];
-                let [arc_ai, arc_bi] = A.edgeOfIntersection(B);
-
-                let arc_a = this.shadow.arcs[arc_ai];
-                let arc_b = this.shadow.arcs[arc_bi];
-
-                let turnsA = (new Array(w_a).fill(1)).concat(
-                    (new Array(w_b).fill(-1)));
-                let turnsB = (new Array(w_b).fill(1)).concat(
-                    (new Array(w_a).fill(-1)));
-
-                this.subdivideEdge(arc_a, turnsA.length);
-
-                A.bend(arc_a, turnsA);
-                B.bend(arc_b, turnsB);
-            }
-        }
-    }
-
-    subdivideEdge(arc, n) {
-        let head = arc;
-        let tail;
-        let backwards = !this.shadow.components.some(c => c.includes(arc));
-        if (backwards) {
-            tail = head;
-            head = tail.edgeOpposite;
-        } else {
-            tail = head.edgeOpposite;
-        }
-
-        let strands = (new Array(2*n).fill(0)).map(i => this.shadow.newArc());
-        strands.splice(0, 0, head);
-        strands.push(tail);
-
-        // Glue edges
-        for (let si = 0; si < strands.length; si += 2) {
-            strands[si].edgeOpposite = strands[si+1];
-            strands[si+1].edgeOpposite = strands[si];
-
-            this.shadow.setEdge(this.shadow.edges.length,
-                                [strands[si].index, strands[si+1].index]);
-        }
-
-        // Glue degree 2 joints
-        for (let si = 1; si < strands.length-1; si += 2) {
-            strands[si].vertNext = strands[si+1];
-            strands[si].vertPrev = strands[si+1];
-            strands[si].vertOppo = strands[si+1];
-
-            strands[si+1].vertNext = strands[si];
-            strands[si+1].vertPrev = strands[si];
-            strands[si+1].vertOppo = strands[si];
-
-            this.shadow.setVert(this.shadow.verts.length,
-                                [strands[si].index, undefined, strands[si+1].index, undefined]);
-        }
-    }
-
-    repairComponents() {
-        this.arcComponentMap = new Map();
-        this.orderedArcs = [];
-        this.components = [];
-
-        for (let i = 0; i < this.shadow.components.length; i++) {
-            for (let arc of this.shadow.components[i]) {
-                this.arcComponentMap.set(arc.index, i);
-                this.orderedArcs.push(arc);
-            }
-
-            let comp_root_a = this.shadow.components[i][0];
-            let arc = comp_root_a;
-            let component = [];
-            do {
-                component.push(arc);
-                arc = arc.vertOppo.edgeOpposite;
-            } while (arc.index != comp_root_a.index)
-            this.components.push(component);
-        }
-    }
-
-    orientEdges() {
-        let orientations = [];
-        orientations[this.faces[0].arcs[0].index] = 'right';
-
-        let G = this.faceNetwork.copy();
-        G.removeNode('s');
-        G.removeNode('t');
-
-        for (let node of G.depthFirstSearch(0)) {
-            let F = this.faces[node];
-            for (let arc of F.arcs) {
-                if (arc.index in orientations) {
-                    let newOrientations = F.orientEdges(
-                        arc, orientations[arc.index]);
-                    for (let [a, dir] of newOrientations) {
-                        if (a in orientations) {
-                            console.assert(orientations[a] == dir, orientations, a, dir);
-                        } else {
-                            orientations[a] = dir;
-                        }
-                    }
-                    break;
-                }
-            }
-        }
-
-        //console.assert(orientations.length, orientations);
-        this.orientations = orientations;
-    }
-
-    orthogonalSpec() {
-        return ['right', 'up'].map(
-            dir => this.edges.filter(a => this.orientations[a.index] == dir).map(
-                a => [a.vert, a.edgeOpposite.vert] // TODO
-            ));
-    }
-
-    orthogonalRep() {
-        return new __WEBPACK_IMPORTED_MODULE_1__orthrep_js__["a" /* default */](...this.orthogonalSpec());
+    decreaseY(amount) {
+        this.y -= amount;
     }
 }
-/* harmony export (immutable) */ __webpack_exports__["a"] = OrthogonalDiagramEmbedding;
+/* harmony export (immutable) */ __webpack_exports__["a"] = Point;
 
 
 
 /***/ }),
-/* 3 */
+/* 10 */
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
-class Arc {
-    constructor(index) {
-        this.index = index;
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_0__math_quad__ = __webpack_require__(11);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__math_point__ = __webpack_require__(9);
+
+
+
+class QuadTree {
+    constructor(bounds, maxObjects, maxLevels, level = 0) {
+        this.bounds = bounds;
+        this.maxObjects = maxObjects;
+
+        this.maxLevels = maxLevels;
+        this.level = level;
+
+        this.objects = [];
+        this.children = [];
     }
 
-    toString() {
-        return this.index.toString();
+    set northWest(tree) {
+        this.children[0] = tree;
     }
 
-    valueOf() {
-        return this.index;
+    set northEast(tree) {
+        this.children[1] = tree;
     }
-}
 
-class LinkShadow {
-    constructor(verts) {
-        this.nv = verts.length;
-        this.ne = this.nv*2;
-        this.na = this.nv*4;
+    set southWest(tree) {
+        this.children[2] = tree;
+    }
 
-        this.arcs = [];
-        this.edges = [];
-        this.verts = [];
+    set southEast(tree) {
+        this.children[3] = tree;
+    }
 
-        // Edge i is canonically of the form [2i, 2i+1]
-        for (let ei = 0; ei < this.ne; ei++) {
-            //console.log(ei);
-            this.newArc(2*ei);
-            this.newArc(2*ei+1);
-            //console.log(this.arcs)
+    get northWest() {
+        return this.children[0];
+    }
 
-            this.setEdge(ei, [2*ei, 2*ei+1]);
+    get northEast() {
+        return this.children[1];
+    }
+
+    get southWest() {
+        return this.children[2];
+    }
+
+    get southEast() {
+        return this.children[3];
+    }
+
+
+    insert(obj) {
+        // if we have a sub-tree
+        if (this.northWest !== undefined) {
+            return this._getChild(obj.point).insert(obj);
         }
 
-        // Set verts by looking through verts
-        for (let vi in verts) {
-            this.setVert(vi, verts[vi]);
+        // check to see the point is within bounds of the tree
+        if (!this.bounds.containsPoint(obj.point)) {
+            return false;
         }
 
-        this.generateFaces();
-        this.generateComponents();
-        this.connectArcs();
-    }
+        this.objects.push(obj);
 
-    copy() {
-        let link = new LinkShadow(this.verts.map(
-            v => v.map(a => a.index)
-        ));
-
-        return link;
-    }
-
-    generateFaces() {
-        let leftArcs = new Set(this.arcs);
-        this.faces = [];
-
-        while(leftArcs.size > 0) {
-            let startArc = Array.from(leftArcs).pop();
-
-            let face = [];
-            let arc = startArc;
-            let _failsafe = 0;
-            do {
-                leftArcs.delete(arc);
-                face.push(arc);
-                arc.face = this.faces.length;
-                //console.log(arc);
-
-                let oArc = this.edges[arc.edge][(arc.edgepos+1)%2];
-                arc = this.verts[oArc.vert][(oArc.vertpos+1)%4];
-                //console.log(arc);
-                _failsafe += 1;
-                if (_failsafe > 500) {
-                    console.log("Failure");
-                    return this.faces;
-                }
-            } while (arc != startArc)
-
-            //face.reverse();
-            this.faces.push(face);
-        }
-        return this.faces;
-    }
-
-    generateComponents(oneOrient=true) {
-        let leftArcs = new Set(this.arcs);
-
-        this.components = [];
-        while (leftArcs.size > 0) {
-            let startArc = Array.from(leftArcs).pop();
-
-            let component = this.component(startArc);
-            for (let arc of component) {
-                leftArcs.delete(arc);
-                if (oneOrient) {
-                    // Delete the other arc edge-opposite this one
-                    leftArcs.delete(this.edges[arc.edge][(arc.edgepos+1)%2]);
-                }
+        // split the tree if there are too many objects at this level
+        if (this.objects.length > this.maxObjects && this.level < this.maxLevels) {
+            if (this.northWest === undefined) {
+                this._subdivide();
             }
 
-            this.components.push(component);
-        }
-        return this.components;
-    }
-
-    component(arc) {
-        let startArc = arc;
-
-        let component = [];
-        do {
-            component.push(arc);
-
-            let oArc = this.edges[arc.edge][(arc.edgepos+1)%2];
-            arc = this.verts[oArc.vert][(oArc.vertpos+2)%4];
-        } while (arc != startArc)
-
-        return component;
-    }
-
-    outVertI(arc) {
-        return arc.vert;
-    }
-
-    inVertI(arc) {
-        return this.edgeOpposite(arc).vert;
-    }
-
-    edgeOpposite(arc) {
-        return this.edges[arc.edge][(arc.edgepos+1)%2];
-    }
-    vertNext(arc) {
-        return this.verts[arc.vert][(arc.vertpos+1)%4];
-    }
-    vertPrev(arc) {
-        return this.verts[arc.vert][(arc.vertpos+3)%4];
-    }
-    vertOppo(arc) {
-        return this.verts[arc.vert][(arc.vertpos+2)%4];
-    }
-
-    newArc(idx) {
-        if (idx === undefined) { idx = this.arcs.length; }
-
-        this.arcs[idx] = new Arc(idx);
-        // {index: idx, edge:undefined, edgepos:undefined, vert:undefined, vertpos:undefined};
-        return this.arcs[idx];
-    }
-
-    connectArcs() {
-        /* Hook up the arcs so they know, locally, their linkings */
-
-        for (let arc of this.arcs) {
-            arc.edgeOpposite = this.edgeOpposite(arc);
-            arc.vertNext = this.vertNext(arc);
-            arc.vertPrev = this.vertPrev(arc);
-            arc.vertOppo = this.vertOppo(arc);
-        }
-    }
-
-    setEdge(idx, ais) {
-        this.edges[idx] = ais.map((ai) => {return this.arcs[ai];}, this);
-
-        for (let i in ais) {
-            this.arcs[ais[i]].edge = idx;
-            this.arcs[ais[i]].edgepos = parseInt(i);
-        }
-    }
-
-    setVert(idx, ais) {
-        this.verts[idx] = ais.map((ai) => {return this.arcs[ai];}, this);
-
-        for (let i in ais) {
-            if (ais[i] === undefined) { continue; }
-
-            this.arcs[ais[i]].vert = parseInt(idx);
-            this.arcs[ais[i]].vertpos = parseInt(i);
-        }
-    }
-}
-/* harmony export (immutable) */ __webpack_exports__["a"] = LinkShadow;
-
-
-
-/***/ }),
-/* 4 */,
-/* 5 */,
-/* 6 */
-/***/ (function(module, __webpack_exports__, __webpack_require__) {
-
-"use strict";
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_0__digraph_js__ = __webpack_require__(0);
-
-
-function partialSums(L) {
-    let ans = [0];
-    for (let x of L) {
-        ans.push(ans[ans.length-1] + x);
-    }
-    return ans;
-}
-
-function elementMap(part) {
-    let ans = [];
-    for (let p of part) {
-        for (let x of p) {
-            ans[x] = p;
-        }
-    }
-    return ans;
-}
-
-function basicTopologicalNumbering(G) {
-    let inValences = new Map();
-    G.nodes.forEach(
-        (data, v) => inValences.set(v, G.indegree(v)));
-
-    let numbering = [];
-
-    let currSources = [];
-    for (let [v, deg] of inValences) {
-        if (deg == 0) { currSources.push(v); }
-    }
-
-    let currNumber = 0;
-
-    while (inValences.size > 0) {
-        let newSources = [];
-        for (let v of currSources) {
-            inValences.delete(v);
-            numbering[v] = currNumber;
-
-            for (let e of G.outgoing(v)) {
-                let w = e.sink;
-                inValences.set(w, inValences.get(w) - 1);
-                if (inValences.get(w) == 0) {
-                    newSources.push(w);
-                }
-            }
-            currSources = newSources;
-        }
-        currNumber += 1;
-    }
-
-    return numbering;
-}
-
-function topologicalNumbering(G) {
-    let n = basicTopologicalNumbering(G);
-    let success = true;
-
-    while (success) {
-        success = false;
-        for (let [v, d] of G.nodes) {
-            let below = G.incoming(v).filter(e => e.dummy == false).length;
-            let above = G.outgoing(v).filter(e => e.dummy == false).length;
-
-            if (above != below) {
-                let newPos;
-                if (above > below) {
-                    newPos = Math.min(...G.outgoing(v).map(e => n[e.sink])) - 1;
-                } else {
-                    newPos = Math.max(...G.incoming(v).map(e => n[e.source])) + 1;
-                }
-
-                if (newPos != n[v]) {
-                    n[v] = newPos;
-                    success = true;
-                }
-            }
-        }
-    }
-
-    return n;
-}
-
-function kittyCorner(turns) {
-    let rotations = partialSums(turns);
-    //let reflexCorners = turns.filter(t => t == -1).map((t, i) => i);
-    let reflexCorners = turns.map((t, i) => i).filter(i => turns[i] == -1);
-
-    for (let r0 of reflexCorners) {
-        for (let r1 of reflexCorners.filter(r => r > r0)) {
-            if (rotations[r1] - rotations[r0] == 2) {
-                return [r0, r1];
-            }
-        }
-    }
-    return null;
-}
-
-class OrthogonalFace {
-    constructor(graph, edgeAndVert) {
-        let [edge, vertex] = edgeAndVert;
-        this.evPairs = [];
-        this.evPairs.push(edgeAndVert);
-
-        while (true) {
-            [edge, vertex] = this.evPairs[this.evPairs.length-1];
-            edge = graph.nextEdgeAtVertex(edge, vertex);
-            vertex = (vertex === edge.source) ? edge.sink : edge.source;
-            if (this.evPairs[0][0] == edge && this.evPairs[0][1] == vertex) {
-                break;
-            } else {
-                this.evPairs.push([edge, vertex]);
-            }
-        }
-
-        this.addTurns();
-    }
-
-    addTurns() {
-        this.turns = [];
-        for (let i = 0; i < this.evPairs.length; i++) {
-            let [e0, v0] = this.evPairs[i];
-            let [e1, v1] = this.evPairs[(i+1)%this.evPairs.length];
-
-            if (e0.kind == e1.kind) {
-                this.turns.push(0);
-            } else {
-                let t = (e0.source == v0) ^ (e1.sink == v0) ^ (e0.kind == 'horizontal');
-                this.turns.push(t ? -1 : 1);
-            }
-        }
-
-        let rotation = this.turns.reduce((s, x) => s+x);
-        console.assert( Math.abs(rotation) == 4, rotation );
-        this.exterior = (rotation == -4);
-    }
-
-    kittyCorner() {
-        if (!this.exterior) {
-            return kittyCorner(this.turns);
-        }
-        return null;
-    }
-
-    isTurnRegular() {
-        return this.kittyCorner() === null;
-    }
-
-    switches(swap) {
-        function edgeToEndpoints(e) {
-            if (swap && e.kind == 'horizontal') {
-                return [e.sink, e.source];
-            }
-            return [e.source, e.sink];
-        }
-
-        let ans = [];
-        for (let i = 0; i < this.evPairs.length; i++) {
-            let [e0, v0] = this.evPairs[i];
-            let [t0, h0] = edgeToEndpoints(e0);
-            let [t1, h1] = edgeToEndpoints(this.evPairs[(i+1)%this.evPairs.length][0]);
-
-            if (t0 == t1 && t1 == v0) {
-                ans.push({index: i, kind: 'source', turn: this.turns[i]});
-            } else if (h0 == h1 && h1 == v0) {
-                ans.push({index: i, kind: 'sink', turn: this.turns[i]});
-            }
-        }
-
-        return ans;
-    }
-
-    saturationEdges(swap) {
-        function saturateFace(faceInfo) {
-            for (let i = 0; i < faceInfo.length; i++) {
-                if (faceInfo[i].turn == -1) {
-                    faceInfo = faceInfo.slice(i).concat(faceInfo.slice(0, i));
-                    break;
-                }
-            }
-
-            for (let i = 0; i < faceInfo.length-2; i++) {
-                let [x, y, z] = faceInfo.slice(i, i+3);
-                if (x.turn == -1 && y.turn == z.turn && z.turn == 1) {
-                    let [a, b] = x.kind == 'sink' ? [x, z] : [z, x];
-                    let remaining = faceInfo.slice(0, i)
-                        .concat([{index: z.index, kind: z.kind, turn: 1}])
-                        .concat(faceInfo.slice(i+3));
-                    return [[a.index, b.index]].concat(saturateFace(remaining));
-                }
-            }
-            return [];
-        }
-
-        let newEdges = saturateFace(this.switches(swap));
-        return newEdges.map(([a,b]) => [this.evPairs[a][1], this.evPairs[b][1]]);
-    }
-}
-
-class OrthogonalRep {
-    constructor(horiz_pairs, vert_pairs) {
-        this.graph = new __WEBPACK_IMPORTED_MODULE_0__digraph_js__["a" /* default */]();
-        this.nedges = 0;
-        for (let [a, b] of horiz_pairs) {
-            this.graph.addEdge(a, b, {kind: "horizontal", index: this.nedges++});
-        }
-        for (let [a, b] of vert_pairs) {
-            this.graph.addEdge(a, b, {kind: "vertical", index: this.nedges++});
-        }
-
-        this.buildFaces();
-        this.makeTurnRegular();
-    }
-
-    buildFaces() {
-        this.faces = [];
-        let unseen = new Map();
-        for (let [source, sink, data] of this.graph.edgeGen()) {
-            if (!unseen.has(data.index)) { unseen.set(data.index, new Map()); }
-            unseen.get(data.index).set(source, data);
-            unseen.get(data.index).set(sink, data);
-        }
-
-        while (unseen.size > 0) {
-            let [vert, edge] = unseen.values().next().value.entries().next().value;
-            unseen.get(edge.index).delete(vert);
-            if (unseen.get(edge.index).size <= 0) { unseen.delete(edge.index); }
-
-            let face = new OrthogonalFace(this, [edge, vert]);
-            face.evPairs.forEach(
-                x => {
-                    let [edge, vert] = x;
-                    if (unseen.has(edge.index)) {
-                        unseen.get(edge.index).delete(vert);
-                        if (unseen.get(edge.index).size <= 0) {
-                            unseen.delete(edge.index);
-                        }
-                    }
-                });
-            this.faces.push(face);
-        }
-    }
-
-    link(vert) {
-        let link = this.graph.incidentEdges(vert);
-        function score(e) {
-            return (e.source == vert)*2 + (e.kind == 'vertical');
-        }
-        link.sort((a, b) => score(a) > score(b));
-        return link;
-    }
-
-    nextEdgeAtVertex(edge, vert) {
-        let link = this.link(vert);
-        return link[ (link.indexOf(edge)+1) % link.length ];
-    }
-
-    makeTurnRegular() {
-        let dummy = new Set();
-        let regular = this.faces.filter(F => F.isTurnRegular());
-        let irregular = this.faces.filter(F => !F.isTurnRegular());
-
-        let ell = 0;
-        while (irregular.length > 0) {
-            let F = irregular.pop();
-            let [i, j] = F.kittyCorner();
-            let [v0, v1] = [F.evPairs[i][1], F.evPairs[j][1]];
-
-            let kind = ['vertical', 'horizontal'][ell%2];
-            let e;
-            if (this.graph.incoming(v0).some(e => e.kind == kind)) {
-                e = this.graph.addEdge(v0, v1, {kind: kind, index: this.nedges++});
-            } else {
-                e = this.graph.addEdge(v1, v0, {kind: kind, index: this.nedges++});
-            }
-            dummy.add(e);
-
-            for (let v of [v0, v1]) {
-                F = new OrthogonalFace(this, [e, v]);
-                if (F.isTurnRegular()) {
-                    regular.push(F);
-                } else {
-                    irregular.push(F);
-                }
-            }
-
-            ell++;
-        }
-
-        [this.faces, this.dummy] = [regular, dummy];
-    }
-
-    saturationEdges(swap) {
-        return this.faces.reduce(
-            (arr, f) => arr.concat(f.saturationEdges(swap)), []);
-    }
-
-    dagFromDirection(kind) {
-        let H = new __WEBPACK_IMPORTED_MODULE_0__digraph_js__["a" /* default */]();
-        this.graph.nodes.forEach((data, v) =>
-                                 H.addNode(v));
-        for (let [source, sink, data] of this.graph.edgeGen()) {
-            if (data.kind == kind) { H.addEdge(source, sink); }
-        }
-
-        let maximalChains = H.weakComponents();
-        let vertexToChain = elementMap(maximalChains);
-
-        let D = new __WEBPACK_IMPORTED_MODULE_0__digraph_js__["a" /* default */]();
-        maximalChains.forEach((c, i) => D.addNode(c));
-
-        for (let [source, sink, data] of this.graph.edgeGen()) {
-            if (data.kind != kind) {
-                let d = D.addEdge(vertexToChain[source], vertexToChain[sink]);
-                d.dummy = (this.dummy.has(data));
-            }
-        }
-
-        for (let [u, v] of this.saturationEdges(false)) {
-            let d = D.addEdge(vertexToChain[u], vertexToChain[v]);
-            d.dummy = true;
-       }
-        for (let [u, v] of this.saturationEdges(true)) {
-            if (kind == 'vertical') {
-                let t = u;
-                u = v;
-                v = t;
-            }
-
-            let d = D.addEdge(vertexToChain[u], vertexToChain[v]);
-            d.dummy = true;
-        }
-
-        D.vertexToChain = vertexToChain;
-        return D;
-    }
-
-    chainCoordinates(kind) {
-        let D = this.dagFromDirection(kind);
-        let chainCoords = topologicalNumbering(D);
-
-        let coords = new Map();
-        this.graph.nodes.forEach((data, v) =>
-                                 coords.set(v, chainCoords[D.vertexToChain[v]]));
-        return coords;
-    }
-
-    basicGridEmbedding() {
-        let V = this.chainCoordinates('horizontal');
-        let H = this.chainCoordinates('vertical');
-
-        let emb = new Map();
-        this.graph.nodes.forEach((data, v) => emb.set(v, [H.get(v), V.get(v)]));
-        return emb;
-    }
-}
-/* harmony export (immutable) */ __webpack_exports__["a"] = OrthogonalRep;
-
-
-
-/***/ }),
-/* 7 */
-/***/ (function(module, __webpack_exports__, __webpack_require__) {
-
-"use strict";
-Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_0__lib_shadow_js__ = __webpack_require__(3);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__lib_orthemb_js__ = __webpack_require__(2);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_2__lib_forcediagram_js__ = __webpack_require__(1);
-importScripts('lalolib/lalolib.js');
-importScripts('lodash.min.js');
-
-importScripts('planarmap-em/libplanarmap-em.js');
-
-
-
-
-
-function sleep(millis)
-{
-    var date = new Date();
-    var curDate = null;
-    do { curDate = new Date(); }
-    while(curDate-date < millis);
-}
-
-self.randomDiagram = Module.cwrap('randomDiagram', 'number',
-                                  ['number', 'number', 'number', 'number', 'number', 'number']);
-
-function randomDiagram(n_verts, n_comps, max_att, type) {
-    /* Generate a random diagram using planarmap-emscripten */
-    
-    let vertPtr = Module._malloc(4);
-
-    let nVerts = self.randomDiagram(n_verts, n_comps, max_att, type,
-                                    Math.random()*2**32, vertPtr);
-    if (nVerts == 0) {
-        // No diagram was successfully sampled
-        Module._free(vertPtr);
-        return null;
-    }
-
-    let vertArray = Module.getValue(vertPtr, "i32*");
-
-    let view = Module.HEAP32.subarray(vertArray/4, vertArray/4+(4*nVerts));
-
-    let pd = [];
-    for (let vi = 0; vi < nVerts; vi++) {
-        let vert = [];
-        for (let pos = 0; pos < 4; pos++) {
-            vert.push(view[vi*4+pos]);
-        }
-        pd.push(vert);
-    }
-
-    Module._free(vertArray);
-    Module._free(vertPtr);
-
-    return pd;
-}
-
-var workerFunctions = {
-    setRandomLinkDiagram: function(n_verts, n_comps, max_att, type) {
-        let sigma = randomDiagram(n_verts, n_comps, max_att, type);
-        if (sigma == null) {
-            postMessage({
-                function: "raiseError",
-                arguments: ["A diagram was not sampled successfully"]
-            });
-            return;
-        }
-
-        postMessage({
-            function: "updatePDCode",
-            arguments: ["["+sigma.map(v => "["+v+"]")+"]"]
-        });
-        workerFunctions.setLinkDiagram(sigma);
-    },
-
-    setLinkDiagram: function(sigma, crossBend) {
-        self.shadow = new __WEBPACK_IMPORTED_MODULE_0__lib_shadow_js__["a" /* default */](sigma);
-        self.orthShadow = new __WEBPACK_IMPORTED_MODULE_1__lib_orthemb_js__["a" /* default */](self.shadow);
-
-        let rep = self.orthShadow.orthogonalRep();
-
-        let spec = self.orthShadow.orthogonalSpec();
-
-        let gridEmb = rep.basicGridEmbedding();
-
-        let verts = [];
-        for (let [i, vert] of gridEmb) {
-            verts[i] = vert;
-        }
-        
-        let edges = [];
-        for (let [source, sink, data] of rep.graph.edgeGen()) {
-            //console.log(data);
-            if (!rep.dummy.has(data)) {
-                edges.push([source, sink]);
-            }
-        }
-        let faces = rep.faces.map(f => f.evPairs.map(ev => ev[1]));
-        //faces.forEach(f => f.reverse());
-
-        self.components = self.orthShadow.components.map(c => c.map(a => a.vert));
-        self.faces = self.orthShadow.faces.map(f => {
-            let face = f.arcs.map(a => a.vert);
-            face.exterior = f.exterior;
-            face.degree = f.degree;
-            return face;
-        });
-        self.force_shadow = new __WEBPACK_IMPORTED_MODULE_2__lib_forcediagram_js__["a" /* default */](verts, edges, self.faces, self.components);
-        
-        //console.log(faces);
-        
-
-        postMessage({
-            function: "setLinkDiagram",
-            arguments: [self.force_shadow]
-        });
-
-        workerFunctions.embedDiagram();
-    },
-
-    embedDiagram: function() {
-        let tstart = Date.now();
-
-        let thresh = 5e-10;
-
-        let curDate;
-        self.n_steps = 100;//50;
-        let max_steps = 100;
-
-        for (let i = 0; i < max_steps; i++) {
-            let procStart = Date.now();
-            console.assert(!isNaN(self.force_shadow.aExp));
-            postMessage({
-                function: "setLinkDiagram",
-                arguments: [self.force_shadow]
+            // add all the objects in this node to its children
+            this.objects.forEach(obj => {
+                this._getChild(obj.point).insert(obj);
             });
 
-            self.force_shadow.update();
-            self.force_shadow.aExp -= (1 - 0.4)/self.n_steps;
-            self.force_shadow.erExp += (4 - 2)/self.n_steps;
-            self.force_shadow.dbar -= (3*self.force_shadow.delta)/self.n_steps;
+            this.objects = [];
+        }
+        return true;
+    }
 
-            //do { curDate = Date.now(); }
-            //while( curDate-procStart < 50);
+    queryRange(range, selector = null, cb = null) {
+        let pointsInRange = [];
+
+        if (!this.bounds.intersects(range)) {
+            return pointsInRange;
         }
 
-        postMessage({
-            function: "finalizeLinkDiagram",
-            arguments: [self.force_shadow, self.force_shadow.faces, self.components]
+        this.objects.forEach(obj => {
+            if (range.containsPoint(obj.point)) {
+                pointsInRange.push(obj[selector] || obj);
+            }
         });
-    },
 
-    stepUpdate: function() {
-        self.force_shadow.update();
-        self.force_shadow.aExp -= (1 - 0.4)/self.n_steps;
-        self.force_shadow.reExp += (4 - 2)/self.n_steps;
-        self.force_shadow.dbar -= (3*self.force_shadow.delta)/self.n_steps;
+        if (this.northWest !== undefined) {
+            this.children.forEach(child => {
+                pointsInRange = pointsInRange.concat(child.queryRange(range, selector));
+            });
+        }
 
-        postMessage({
-            function: "finalizeLinkDiagram",
-            arguments: [self.force_shadow, self.force_shadow.faces, self.components]
+        if (cb) {
+            return cb(pointsInRange);
+        }
+
+        return pointsInRange;
+    }
+
+    clear() {
+        this.objects = [];
+
+        this.children.forEach(child => {
+            if (child !== undefined) {
+                child.clear();
+            }
         });
+
+        this.children = [];
+    }
+
+    _subdivide() {
+        let nextLevel = this.level + 1;
+        let subWidth = Math.round(this.bounds.width / 2);
+        let subHeight = Math.round(this.bounds.height / 2);
+        let x = Math.round(this.bounds.xmin);
+        let y = Math.round(this.bounds.ymin);
+
+        let nwBounds = new __WEBPACK_IMPORTED_MODULE_0__math_quad__["a" /* default */](new __WEBPACK_IMPORTED_MODULE_1__math_point__["a" /* default */](x, y), subWidth, subHeight);
+        let neBounds = new __WEBPACK_IMPORTED_MODULE_0__math_quad__["a" /* default */](new __WEBPACK_IMPORTED_MODULE_1__math_point__["a" /* default */](x + subWidth, y), subWidth, subHeight);
+        let swBounds = new __WEBPACK_IMPORTED_MODULE_0__math_quad__["a" /* default */](new __WEBPACK_IMPORTED_MODULE_1__math_point__["a" /* default */](x, y + subHeight), subWidth, subHeight);
+        let seBounds = new __WEBPACK_IMPORTED_MODULE_0__math_quad__["a" /* default */](new __WEBPACK_IMPORTED_MODULE_1__math_point__["a" /* default */](x + subWidth, y + subHeight), subWidth, subHeight);
+
+        this.northWest = new QuadTree(nwBounds, this.maxObjects, this.maxLevels, nextLevel);
+        this.northEast = new QuadTree(neBounds, this.maxObjects, this.maxLevels, nextLevel);
+        this.southWest = new QuadTree(swBounds, this.maxObjects, this.maxLevels, nextLevel);
+        this.southEast = new QuadTree(seBounds, this.maxObjects, this.maxLevels, nextLevel);
+    }
+
+    _getChild(point) {
+        if (this.northWest.bounds.containsPoint(point)) return this.northWest;
+        if (this.northEast.bounds.containsPoint(point)) return this.northEast;
+        if (this.southWest.bounds.containsPoint(point)) return this.southWest;
+        if (this.southEast.bounds.containsPoint(point)) return this.southEast;
     }
 }
+/* unused harmony export default */
 
-onmessage = function(e) {
-    workerFunctions[e.data.function](...e.data.arguments);
+
+
+/***/ }),
+/* 11 */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_0__point__ = __webpack_require__(9);
+
+
+class Quad {
+
+    constructor(origin, width, height) {
+        this.origin = origin;
+        this.width = width;
+        this.height = height;
+        this.xmin = origin.x;
+        this.xmax = origin.x + width;
+        this.ymin = origin.y;
+        this.ymax = origin.y + height;
+    }
+
+    static copy(quad) {
+        let origin = new __WEBPACK_IMPORTED_MODULE_0__point__["a" /* default */](quad.origin.x, quad.origin.y);
+        let width = quad.width;
+        let height = quad.height;
+
+        return new Quad(origin, width, height);
+    }
+
+    intersects(quad) {
+        if (this.xmin < quad.xmax && this.xmax > quad.xmin &&
+            this.ymin < quad.ymax && this.ymax > quad.ymin) return true;
+        return false;
+    }
+
+    containsPoint(point) {
+        return (point.x <= this.xmax && point.x >= this.xmin) &&
+            (point.y <= this.ymax && point.y >= this.ymin);
+    }
 }
+/* harmony export (immutable) */ __webpack_exports__["a"] = Quad;
+
 
 
 /***/ })
