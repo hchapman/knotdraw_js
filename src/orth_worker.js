@@ -119,8 +119,8 @@ var workerFunctions = {
         let thresh = 5e-10;
 
         let curDate;
-        self.n_steps = 50;//50;
-        let max_steps = 50;
+        self.n_steps = 100;//50;
+        let max_steps = 100;
 
         for (let i = 0; i < max_steps; i++) {
             let procStart = Date.now();
@@ -132,7 +132,7 @@ var workerFunctions = {
 
             self.force_shadow.update();
             self.force_shadow.aExp -= (1 - 0.4)/self.n_steps;
-            self.force_shadow.reExp += (4 - 2)/self.n_steps;
+            self.force_shadow.erExp += (4 - 2)/self.n_steps;
             self.force_shadow.dbar -= (3*self.force_shadow.delta)/self.n_steps;
 
             //do { curDate = Date.now(); }

@@ -1,7 +1,7 @@
 export default class ForceLinkDiagram {
     /* Link diagram embedding improved by ImPrEd */
     constructor (verts, edges, faces, components) {
-        this.verts = verts;
+        this.verts = new Map(verts.map((v, vi) => [vi, v]));
         this.edges = edges;
         this.edgeMatrix = [];
         for (let edge of this.edges) {
@@ -11,7 +11,6 @@ export default class ForceLinkDiagram {
             if (!(edge[1] in this.edgeMatrix)) {
                 this.edgeMatrix[edge[1]] = [];
             }
-            //console.log(this.edgeMatrix);
             this.edgeMatrix[edge[0]][edge[1]] = edge;
             this.edgeMatrix[edge[1]][edge[0]] = edge;
         }
@@ -19,11 +18,7 @@ export default class ForceLinkDiagram {
         this.components = components;
 
         this.freeVi = [];
-
-        //console.log("+++++++");
-        //console.log(verts);
-        //console.log(edges);
-        //console.log(faces);
+        this.maxVi = Math.max(...verts.keys())+1;
 
         this.adjMap = {};
         for (let edge of edges) {
@@ -41,7 +36,7 @@ export default class ForceLinkDiagram {
             }
         }
 
-        let N = this.verts.length;
+        let N = this.verts.size;
         function index(edge) {
             return edge[0] * N + edge[1];
         }
@@ -54,13 +49,11 @@ export default class ForceLinkDiagram {
             let path;
             let edge = deindex(edgeSearch.values().next().value);
             edgeSearch.delete(index(edge));
-            //console.log(edge);
 
             let [prev, next] = edge;
             path = [prev, next];
-            //console.log(path);
+
             while (this.adjMap[prev].length == 2) {
-                //console.log(this.adjMap[prev]);
                 let tmp = prev;
                 prev = (this.adjMap[prev][0] == next ?
                         this.adjMap[prev][1] : this.adjMap[prev][0]);
@@ -73,7 +66,6 @@ export default class ForceLinkDiagram {
 
             [prev, next] = edge;
             while (this.adjMap[next].length == 2) {
-                //console.log(this.adjMap[next]);
                 let tmp = next;
                 next = (this.adjMap[next][0] == prev ?
                         this.adjMap[next][1] : this.adjMap[next][0]);
@@ -86,7 +78,6 @@ export default class ForceLinkDiagram {
 
             this.paths.push(path);
         }
-        //console.log(this.paths);
 
         this.delta = 2;
         this.gamma = 5;
@@ -94,7 +85,7 @@ export default class ForceLinkDiagram {
         this.dbar = 3*this.delta;
 
         this.alpha = 2*this.delta;
-        this.beta = 2*this.delta;
+        this.beta = 3*this.delta;
 
         //this.flexEvery = 2;
 
@@ -110,7 +101,7 @@ export default class ForceLinkDiagram {
         if (this.freeVi.length > 0) {
             return this.freeVi.pop();
         }
-        return this.verts.length;
+        return this.verts.size;
     }
 
     distance(u, v) {
@@ -118,7 +109,6 @@ export default class ForceLinkDiagram {
     }
 
     forceAvert(u, v) {
-        //console.log(this.distance(u,v));
         return mul(Math.pow(this.distance(u, v)/this.delta, this.aExp),
                    sub(v, u));
     }
@@ -169,13 +159,17 @@ export default class ForceLinkDiagram {
         for (let face of this.faces) {
             if (face.includes(ui)) {
                 for (let i = 0; i < face.length-1; i++) {
-                    console.assert(this.edges.filter(
+                    console.assert(this.edges.some(
                         e => ((e[0] == face[i] && e[1] == face[i+1]) ||
-                              (e[1] == face[i] && e[0] == face[i+1]))).length > 0);
-                    edges.add(this.edgeMatrix[face[i]][face[i+1]]);
+                              (e[1] == face[i] && e[0] == face[i+1]))), this.edges, face, i, ui);
+                    if (face[i] != ui && face[i+1] != ui) {
+                        edges.add(this.edgeMatrix[face[i]][face[i+1]]);
+                    }
                     console.assert(!edges.has(undefined));
                 }
-                edges.add(this.edgeMatrix[face[face.length-1]][face[0]]);
+                if (face[face.length-1] != ui && face[0] != ui) {
+                    edges.add(this.edgeMatrix[face[face.length-1]][face[0]]);
+                }
                 console.assert(!edges.has(undefined));
             }
         }
@@ -184,9 +178,9 @@ export default class ForceLinkDiagram {
     }
 
     calculateSurroundingEdges() {
-        this.surrEdges = [];
-        for (let i = 0; i < this.verts.length; i++) {
-            this.surrEdges[i] = this.surroundingEdges(i);
+        this.surrEdges = new Map();
+        for (let [i, v] of this.verts) {
+            this.surrEdges.set(i, this.surroundingEdges(i));
         }
     }
 
@@ -222,15 +216,9 @@ export default class ForceLinkDiagram {
         }
     }
 
-    move (ui, FUx, FUy, MU) {
-        console.assert (this.verts[ui] !== undefined, this.verts);
-        let i = this.octant(FUx, FUy);
-
-        let FU = [FUx, FUy];
-
-        if (ui == 2) {
-            console.log(ui, FUx, FUy, MU[i]);
-        }
+    move (ui, FU, MU) {
+        console.assert (this.verts.get(ui) !== undefined, this.verts);
+        let i = this.octant(FU[0], FU[1]);
 
         MU[i] = Math.max(0, MU[i]);
         let fU = norm(FU);
@@ -241,14 +229,10 @@ export default class ForceLinkDiagram {
             du = mul(MU[i]/fU, FU);
         }
 
-        if (ui == 2) {
-            console.log(ui, FUx, FUy, MU[i], du, norm(du), Number.EPSILON);
-        }
-
         if (norm(du) < 10*Number.EPSILON) { return; }
 
-        this.verts[ui][0] += du[0];
-        this.verts[ui][1] += du[1];
+        this.verts.get(ui)[0] += du[0];
+        this.verts.get(ui)[1] += du[1];
     }
 
     triangleIncludes(a, b, c, p,vi) {
@@ -269,82 +253,78 @@ export default class ForceLinkDiagram {
         let u = (dot11 * dot20 - dot01 * dot21) * invDenom;
         let v = (dot00 * dot21 - dot01 * dot20) * invDenom;
 
-        if (this.numIter == 4) {
-            if (vi == 13) {
-                //console.log(a, b, c, p);
-                //console.log(u, v, 1-(u+v));
-            }
-        }
-
         return (u >= 0) && (v >= 0) && (u+v < 1);
     }
 
     contract() {
         for (let path of this.paths) {
-            for (let i = 0; i < path.length-2; i++) {
-                let [ai, bi, ci] = path.slice(i, i+3);
-                let [a, b, c] = [this.verts[ai], this.verts[bi], this.verts[ci]];
-                if (norm(sub(a, b)) < this.alpha) {
-                    if (this.faces.filter(f => f.includes(ai)).some(f => f.length <= 3)) { continue; }
+            let vArray = Array.from(this.verts.entries());
+            let reContract = true;
+            while (reContract) {
+                reContract = false;
+                for (let i = 0; i < path.length-2; i++) {
+                    let [ai, bi, ci] = path.slice(i, i+3);
+                    let [a, b, c] = [this.verts.get(ai), this.verts.get(bi), this.verts.get(ci)];
+                    if (norm(sub(a, b)) < this.alpha) {
+                        if (this.faces.filter(f => f.includes(ai)).some(f => f.length <= 3)) { continue; }
 
-                    if (!this.verts.some(
-                        (v, vi) => (vi != ai && vi != bi && vi != ci && this.triangleIncludes(a,b,c,v,vi)))) {
-                        // contract
+                        if (!vArray.some(
+                            ([vi, v]) => (vi != ai && vi != bi && vi != ci && this.triangleIncludes(a,b,c,v,vi)))) {
+                            // contract
 
-                        //console.log("deleting vertex ", bi);
+                            // delete the vertex at bi
+                            this.verts.delete(bi);
+                            delete this.adjMap[bi];
 
-                        // delete the vertex at bi
-                        delete this.verts[bi];
-                        delete this.adjMap[bi];
+                            // remove bi from its adjacent vertices at ai and ci
+                            this.adjMap[ai].splice(this.adjMap[ai].indexOf(bi), 1);
+                            this.adjMap[ci].splice(this.adjMap[ci].indexOf(bi), 1);
+                            this.adjMap[ai].push(ci);
+                            this.adjMap[ci].push(ai);
+                            let nEdge = [ai, ci];
+                            this.edgeMatrix[ai][ci] = nEdge;
+                            this.edgeMatrix[ci][ai] = nEdge;
+                            this.edges.push(nEdge);
 
-                        // remove bi from its adjacent vertices at ai and ci
-                        this.adjMap[ai].splice(this.adjMap[ai].indexOf(bi), 1);
-                        this.adjMap[ci].splice(this.adjMap[ci].indexOf(bi), 1);
-                        this.adjMap[ai].push(ci);
-                        this.adjMap[ci].push(ai);
-                        let nEdge = [ai, ci];
-                        this.edgeMatrix[ai][ci] = nEdge;
-                        this.edgeMatrix[ci][ai] = nEdge;
-                        this.edges.push(nEdge);
-
-                        // remove bi from any faces
-                        let bFaces = this.faces.filter(f => f.includes(bi));
-                        // first, update these faces' surrEdges
-                        for (let f of bFaces) {
-                            for (let ui of f) {
-                                for (let bEdge of this.edgeMatrix[bi]) {
-                                    if (bEdge === undefined) { continue; }
-                                    //console.log(bEdge);
-                                    this.surrEdges[ui].delete(bEdge);
+                            // remove bi from any faces
+                            let bFaces = this.faces.filter(f => f.includes(bi));
+                            // first, update these faces' surrEdges
+                            for (let f of bFaces) {
+                                for (let ui of f) {
+                                    for (let bEdge of this.edgeMatrix[bi]) {
+                                        if (bEdge === undefined) { continue; }
+                                        this.surrEdges.get(ui).delete(bEdge);
+                                    }
+                                    if (!nEdge.includes(ui)) {
+                                        this.surrEdges.get(ui).add(nEdge);
+                                    }
                                 }
-                                this.surrEdges[ui].add(nEdge);
                             }
+
+                            // finally, remove bi from the faces
+                            bFaces.forEach(f => f.splice(f.indexOf(bi), 1));
+
+                            // remove bi from any components.
+                            this.components.filter(cp => cp.includes(bi)).forEach(
+                                cp => {while(cp.includes(bi)) { cp.splice(cp.indexOf(bi), 1); }}
+                            );
+
+                            // remove edges including bi
+                            this.edges.splice(this.edges.indexOf(this.edgeMatrix[ai][bi]), 1);
+                            this.edges.splice(this.edges.indexOf(this.edgeMatrix[bi][ci]), 1);
+                            delete this.edgeMatrix[ai][bi];
+                            delete this.edgeMatrix[ci][bi];
+                            delete this.edgeMatrix[bi];
+
+                            // remove bi from this path
+                            path.splice(path.indexOf(bi), 1);
+                            reContract = true;
+                            break; // Only contract one bend of a path at a time???
                         }
-
-                        // finally, remove bi from the faces
-                        //console.log(bFaces);
-                        bFaces.forEach(f => f.splice(f.indexOf(bi), 1));
-                        //console.log("bFaces has no", bi, bFaces);
-
-                        // remove bi from any components.
-                        this.components.filter(cp => cp.includes(bi)).forEach(
-                            cp => {while(cp.includes(bi)) { cp.splice(cp.indexOf(bi), 1); }}
-                        );
-
-                        // remove edges including bi
-                        this.edges.splice(this.edges.indexOf(this.edgeMatrix[ai][bi]), 1);
-                        this.edges.splice(this.edges.indexOf(this.edgeMatrix[bi][ci]), 1);
-                        delete this.edgeMatrix[ai][bi];
-                        delete this.edgeMatrix[ci][bi];
-                        delete this.edgeMatrix[bi];
-
-                        // remove bi from this path
-                        path.splice(path.indexOf(bi), 1);
-                        break; // Only contract one bend of a path at a time???
                     }
                 }
+                //break;
             }
-            //break;
         }
     }
 
@@ -352,132 +332,184 @@ export default class ForceLinkDiagram {
         for (let path of this.paths) {
             for (let i = 0; i < path.length-1; i++) {
                 let [ai, bi] = path.slice(i,i+2);
-                let [a, b] = [this.verts[ai], this.verts[bi]];
-                let elen = norm(sub(a, b);
-                if (elen) > this.beta) {
+                let [a, b] = [this.verts.get(ai), this.verts.get(bi)];
+                let elen = norm(sub(a, b));
+                if (elen > this.beta) {
                     // Insert a new vertex along this path
-                    //let nv = 
-                }
+                    let vi = this.maxVi++;
+                    this.verts.set(vi, mul(.5, add(a, b)));
 
+                    // Edge to delete; which was split
+                    let splitEdge = this.edgeMatrix[ai][bi];
+
+                    // Add the new edges to the diagram
+                    let nEdgeA = [ai, vi];
+                    let nEdgeB = [vi, bi];
+
+                    // Update the edgematrix of edges
+                    this.edgeMatrix[vi] = [];
+                    this.edgeMatrix[ai][vi] = nEdgeA;
+                    this.edgeMatrix[vi][ai] = nEdgeA;
+                    this.edgeMatrix[bi][vi] = nEdgeB;
+                    this.edgeMatrix[vi][bi] = nEdgeB;
+
+                    // Remove splitEdge from edges, then add in these new edges
+                    this.edges.splice(this.edges.indexOf(splitEdge), 1);
+                    this.edges.push(nEdgeA); this.edges.push(nEdgeB);
+
+                    // vi is adjacent to the two endpoints ai, bi
+                    this.adjMap[vi] = [ai, bi];
+
+                    // ai is no longer adjacent to bi
+                    this.adjMap[ai].splice(this.adjMap[ai].indexOf(bi), 1, vi);
+                    this.adjMap[bi].splice(this.adjMap[bi].indexOf(ai), 1, vi);
+
+                    // Add vi to faces adjacent to splitEdge
+                    for (let f of this.faces) {
+                        let fi = f.findIndex((v, i, f) => f[i]==ai && f[(i+1)%f.length]==bi);
+                        if (fi == -1) {
+                            fi = f.findIndex((v, i, f) => f[i]==bi && f[(i+1)%f.length]==ai);
+                        }
+                        if (fi == -1) { continue; }
+
+                        // Update surrEdges for vertices in f which AREN'T vi
+                        for (let ui of f) {
+                            this.surrEdges.get(ui).delete(splitEdge);
+                            if (ai != ui) {
+                                this.surrEdges.get(ui).add(nEdgeA);
+                            }
+                            if (bi != ui) {
+                                this.surrEdges.get(ui).add(nEdgeB);
+                            }
+                        }
+
+                        f.splice(fi+1,0,vi);
+                    }
+
+                    // Add vi to any components
+                    for (let comp of this.components) {
+                        let fi = comp.findIndex((v, i, f) => f[i]==ai && f[(i+1)%f.length]==bi);
+                        if (fi == -1) {
+                            fi = comp.findIndex((v, i, f) => f[i]==bi && f[(i+1)%f.length]==ai);
+                        }
+                        if (fi == -1) { continue; }
+
+                        if (fi != -1) {
+                            comp.splice(fi+1,0,vi);
+                        }
+                    }
+
+                    // Set surrEdges for vi
+                    this.surrEdges.set(vi, this.surroundingEdges(vi));
+
+                    // Add vi to this path
+                    path.splice(i+1,0,vi);
+                    break; // only expand once per path, for now?
+                }
             }
         }
     }
 
     update() {
-        // if (contract) {
-        //console.log(this.surrEdges);
 
+        // if (contract) {
         if (true) {
             this.contract();
         }
 
+        // if (expand) {
         if (true) {
             this.expand();
         }
-        //console.log(this.edges);
-        //console.log(this.faces);
-        //console.log(this.surrEdges);
 
-        //return;
-        if (this.numIter == 4) {
-           // return;
-        }
         this.numIter++;
 
-        //console.log(this.adjMap);
-        let FX = zeros(this.verts.length);
-        let FY = zeros(this.verts.length);
-        let M = [];
-        for (let i = 0; i < this.verts.length; i++) {
-            M.push([this.dbar, this.dbar, this.dbar, this.dbar,
-                    this.dbar, this.dbar, this.dbar, this.dbar]);
+        let F = new Map(Array.from(this.verts.keys()).map(k => [k, [0,0]])); //zeros(this.verts.size);
+        let M = new Map();
+        for (let [vi, v] of this.verts) {
+            M.set(vi, [this.dbar, this.dbar, this.dbar, this.dbar,
+                       this.dbar, this.dbar, this.dbar, this.dbar]);
         }
 
-        let barycenter = mul(1/this.verts.length, sum(this.verts, 2));
+        let barycenter = mul(1/this.verts.size, sum(Array.from(this.verts.values()), 2));
 
-        //for (let ui = 0; ui < this.verts.length; ui++) {
-        for (let ui in this.verts) {
-            
+        //for (let ui = 0; ui < this.verts.size; ui++) {
+        for (let [ui, u] of this.verts) {
+            let Fu = F.get(ui);
+
             // Calculate gravity force
-            let db = sub(barycenter, this.verts[ui]);
+            let db = sub(barycenter, this.verts.get(ui));
             let nDb = norm(db);
-            FX[ui] += db[0]/nDb;
-            FY[ui] += db[1]/nDb;
+            Fu[0] += db[0]/nDb;
+            Fu[1] += db[1]/nDb;
 
             // Calculate total node-node repulsive force
-            //for (let vi = 0; vi < this.verts.length; vi++) {
-            for (let vi in this.verts) {
+            for (let [vi, v] of this.verts) {
                 if (ui != vi) {
-                    if (this.distance(ui, vi) >= 3*this.delta) {
+                    if (this.paths.some(p => p.includes(ui) && p.includes(vi))) {
+                        //console.log("consec");
                         continue;
                     }
+                    //if (this.adjMap[ui].length == 2) {
+                    //    if (this.adjMap[ui].includes(vi)) {
+                    //        continue;
+                    //    }
+                    //}
 
-                    if (this.adjMap[ui].length == 2) {
-                        if (this.adjMap[ui].includes(vi)) {
-                            continue;
-                        }
-                    }
-
-                    let F = this.forceRvert(this.verts[ui], this.verts[vi]);
-                    //console.log("Fnnr", F);
-                    //console.log(ui, vi, this.verts[ui], this.verts[vi], "Fnnr", F);
-                    if (!isNaN(F[0])) {
-                        FX[ui] += F[0];
-                        FY[ui] += F[1];
+                    let dF = this.forceRvert(u, v);
+                    if (!isNaN(dF[0])) {
+                        Fu[0] += dF[0];
+                        Fu[1] += dF[1];
                     }
                 }
             }
 
             // calculate edge attractive force
             for (let vi of this.adjMap[ui]) {
-                let F = this.forceAvert(this.verts[ui], this.verts[vi]);
+            //for (let vi of this.paths.find(p => p.includes(ui)).filter(ell => ell != ui)) {
+                let dF = this.forceAvert(this.verts.get(ui), this.verts.get(vi));
 
-                FX[ui] += F[0];
-                FY[ui] += F[1];
+                Fu[0] += dF[0];
+                Fu[1] += dF[1];
             }
 
             // calculate node-edge repulsive force
-            for (let edge of this.surrEdges[ui]) {
+            for (let edge of this.surrEdges.get(ui)) {
                 let [ai, bi] = edge;
                 if (ui == ai || ui == bi) {
                     continue;
                 }
                 let ve = this.computeVe(
-                    this.verts[ui], this.verts[ai], this.verts[bi]);
+                    u, this.verts.get(ai), this.verts.get(bi));
 
-                if (this.veOnEdge(ve, this.verts[ai], this.verts[bi])) {
-                    let F = this.forceRedge(
-                        this.verts[ui], this.verts[ai], this.verts[bi], ve);
-                    if (!isNaN(F[0])) {
-                        FX[ui] += F[0];
-                        FY[ui] += F[1];
+                if (this.veOnEdge(ve, this.verts.get(ai), this.verts.get(bi))) {
+                    let dF = this.forceRedge(
+                        u, this.verts.get(ai), this.verts.get(bi), ve);
+                    if (!isNaN(dF[0])) {
+                        Fu[0] += dF[0];
+                        Fu[1] += dF[1];
                     }
                 }
             }
 
-            let MU = M[ui];
-            //console.log("Surr:", this.surrEdges);
+            let MU = M.get(ui);
 
-            for (let edge of this.surrEdges[ui]) {
+            for (let edge of this.surrEdges.get(ui)) {
                 let [ai, bi] = edge;
                 if (ui == ai || ui == bi) {
                     continue;
                 }
                 let ve = this.computeVe(
-                    this.verts[ui], this.verts[ai], this.verts[bi]);
+                    u, this.verts.get(ai), this.verts.get(bi));
 
                 let cv;
 
-                if (ui == 0 && ai == 5 && bi == 2) {
-                    //console.log(this.verts[ai], this.verts[bi], ve);
-                }
-                //console.log("v-e", ui, ai, bi);
-                if (this.veOnEdge(ve, this.verts[ai], this.verts[bi])) {
-                    cv = sub(ve, this.verts[ui]);
+                if (this.veOnEdge(ve, this.verts.get(ai), this.verts.get(bi))) {
+                    cv = sub(ve, u);
 
                 } else {
-                    let va = sub(this.verts[ai], this.verts[ui]);
-                    let vb = sub(this.verts[bi], this.verts[ui]);
+                    let va = sub(this.verts.get(ai), u);
+                    let vb = sub(this.verts.get(bi), u);
                     if (norm(va) < norm(vb)) {
                         cv = va;
                     } else {
@@ -505,37 +537,38 @@ export default class ForceLinkDiagram {
 
                 let cw_angle = cv_angle + Math.PI;
 
-                for (let j = 0; j < MU.length; j++) {
+                let Ma = M.get(ai);
+                for (let j = 0; j < Ma.length; j++) {
                     if ((ell-j+8)%8 == 0) {
-                        M[ai][j] = Math.min(M[ai][j], maxR);
+                        Ma[j] = Math.min(Ma[j], maxR);
                     } else if ((ell-j+8)%8 == 1 || (ell-j+8)%8 == 2) {
-                        M[ai][j] = Math.min(M[ai][j], maxR /
-                                            Math.cos(cw_angle - (j+1)*Math.PI/4));
+                        Ma[j] = Math.min(Ma[j], maxR /
+                                         Math.cos(cw_angle - (j+1)*Math.PI/4));
                     } else if ((ell-j+8)%8 == 6 || (ell-j+8)%8 == 7) {
-                        M[ai][j] = Math.min(M[ai][j], maxR /
-                                            Math.cos(cw_angle - (j)*Math.PI/4));
+                        Ma[j] = Math.min(Ma[j], maxR /
+                                         Math.cos(cw_angle - (j)*Math.PI/4));
                     }
                 }
 
-                for (let j = 0; j < MU.length; j++) {
+                let Mb = M.get(bi);
+                for (let j = 0; j < Mb.length; j++) {
                     if ((ell-j+8)%8 == 0) {
-                        M[bi][j] = Math.min(M[bi][j], maxR);
+                        Mb[j] = Math.min(Mb[j], maxR);
                     } else if ((ell-j+8)%8 == 1 || (ell-j+8)%8 == 2) {
-                        M[bi][j] = Math.min(M[bi][j], maxR /
-                                            Math.cos(cw_angle - (j+1)*Math.PI/4));
+                        Mb[j] = Math.min(Mb[j], maxR /
+                                         Math.cos(cw_angle - (j+1)*Math.PI/4));
                     } else if ((ell-j+8)%8 == 6 || (ell-j+8)%8 == 7) {
-                        M[bi][j] = Math.min(M[bi][j], maxR /
-                                            Math.cos(cw_angle - (j)*Math.PI/4));
+                        Mb[j] = Math.min(Mb[j], maxR /
+                                         Math.cos(cw_angle - (j)*Math.PI/4));
                     }
                 }
 
             }
-            //if (ui == 0) console.log("MU0", MU, FX[ui], FY[ui]);
         }
 
-        //console.log("Fx", FX);
-        for (let ui in this.verts) {
-            this.move(ui, FX[ui], FY[ui], M[ui]);
+        // Move all verts based on their maximal movements and forces
+        for (let [ui, u] of this.verts) {
+            this.move(ui, F.get(ui), M.get(ui));
         }
     }
 }

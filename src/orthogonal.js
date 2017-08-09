@@ -48,11 +48,11 @@ class MeshDraw {
     set_link_diagram(ld) {
         let pts = array2mat(ld.verts);
         //console.log(pts);
-        this.min_x = ld.verts.reduce((m, [x,y]) => Math.min(m, x), Infinity);
-        this.min_y = ld.verts.reduce((m, [x,y]) => Math.min(m, y), Infinity);
+        this.min_x = Array.from(ld.verts.values()).reduce((m, [x,y]) => Math.min(m, x), Infinity);
+        this.min_y = Array.from(ld.verts.values()).reduce((m, [x,y]) => Math.min(m, y), Infinity);
 
-        this.max_x = ld.verts.reduce((m, [x,y]) => Math.max(m, x), -Infinity);
-        this.max_y = ld.verts.reduce((m, [x,y]) => Math.max(m, y), -Infinity);
+        this.max_x = Array.from(ld.verts.values()).reduce((m, [x,y]) => Math.max(m, x), -Infinity);
+        this.max_y = Array.from(ld.verts.values()).reduce((m, [x,y]) => Math.max(m, y), -Infinity);
 
         this.wid = this.max_x-this.min_x;
         this.hgt = this.max_y-this.min_y;
@@ -87,17 +87,18 @@ class MeshDraw {
 
         let i = 0;
         //console.log(ld.verts, "!!");
-        for (let vi in ld.verts) {
-            let vert = ld.verts[vi];
+        for (let [vi, vert] of ld.verts) {
+            
             if (vert === undefined) { continue; }
             //this.nodeG.circle(vert[0], vert[1], .25);
             if (this.nodes[i] === undefined) {
                 let t = new paper.PointText({
-                    point: vert,
+                    point: [vert[0], vert[1]],
                     content: ""+vi,
                     fontSize: 12,
                 });
-                t.scale(1/this.zoom, vert);
+                //console.log(vi, vert);
+                t.scale(1/this.zoom, [vert[0], vert[1]]);
                 //console.log(t.scaling, t.applyMatrix);
                 //let t = this.nodeG.text(vert[0], vert[1], i.toString());
                 //t.attr({"style": "font-size: .5px;"});
@@ -109,7 +110,7 @@ class MeshDraw {
         }
 
         for (let edge of ld.edges) {
-            let [a, b] = [ld.verts[edge[0]], ld.verts[edge[1]]];
+            let [a, b] = [ld.verts.get(edge[0]), ld.verts.get(edge[1])];
             if (this.edges[edge] === undefined) {
                 let edgePath = new paper.Path();
                 edgePath.strokeColor = 'green';
@@ -126,18 +127,18 @@ class MeshDraw {
 
     finalize_link_diagram(ld, faces, components) {
         let min_radii = [];
-        for (let ai in ld.verts) {
-            let a = ld.verts[ai];
+        let vEArray = Array.from(ld.verts.entries());
+        for (let [ai, a] of ld.verts) {
             //console.log(ld.adjMap[ai]);
             if (ld.adjMap[ai].length != 2) {
                 // ai is a crossing
-                min_radii[ai] = ld.verts.reduce((r, p, pi) => ai==pi ? r : Math.min(r, norm(sub(a, p))), Infinity)/2;
+                min_radii[ai] = Array.from(ld.verts.values()).reduce((r, p, pi) => ai==pi ? r : Math.min(r, norm(sub(a, p))), Infinity)/2;
                 //min_radii[ai] = Math.min(...ld.verts.map(
                 //    (b, bi) => bi == ai ? Infinity : norm(sub(a, b))))/2;
             } else {
                 // ai is an edge
                 let [bi, ci] = ld.adjMap[ai];
-                let [b, c] = [ld.verts[bi], ld.verts[ci]];
+                let [b, c] = [ld.verts.get(bi), ld.verts.get(ci)];
                 let u = [b[0]-a[0], b[1]-a[1]];
                 let v = [c[0]-a[0], c[1]-a[1]];
 
@@ -156,18 +157,19 @@ class MeshDraw {
                 let phi = (phi_u - phi_v + (Math.PI*2)) % (Math.PI * 2);
                 console.assert(phi <= Math.PI);
 
-                min_radii[ai] = Math.min(...ld.verts.filter(
-                    (x, xi) => {
+                min_radii[ai] = Math.min(...vEArray.filter(
+                    ([xi, x]) => {
                         if (xi == ai) { return false; }
                         if (xi == bi || xi == ci) { return true; }
                         let w = [x[0]-a[0], x[1]-a[1]];
                         let phi_w = Math.atan2(w[1], w[0]);
                         return (phi_u - phi_w + (Math.PI*2)) % (Math.PI*2) < phi;
                     }
-                ).map(x => norm(sub(a, x))))/2;
+                ).map(([xi, x]) => norm(sub(a, x))))/2;
                 //console.log(min_radii[ai]);
             }
 
+            //console.log(ai, a);
             let nodeCircle = new paper.Path.Circle(a[0], a[1], min_radii[ai]);
             nodeCircle.strokeColor = 'red';
             nodeCircle.strokeWidth = .1;
@@ -182,7 +184,8 @@ class MeshDraw {
         let crssPaths = [];
         let p;
 
-        const N = ld.verts.length;
+        const N = Math.max(...ld.verts.keys())+1;
+        //console.log(N);
         function tup(a, b, c) {
             if (b === undefined) {
                 return a;
@@ -201,13 +204,13 @@ class MeshDraw {
             for (let i = 0; i < cmp.length-2; i++) {
                 let bend = cmp.slice(i, i+3);
 
-                let dstart = sub(ld.verts[bend[0]], ld.verts[bend[1]]);
-                let start = add(ld.verts[bend[1]],
+                let dstart = sub(ld.verts.get(bend[0]), ld.verts.get(bend[1]));
+                let start = add(ld.verts.get(bend[1]),
                                 mul(min_radii[bend[1]]/norm(dstart), dstart));
                 if (firststart == undefined) { firststart = start; }
-                let ctrl = ld.verts[bend[1]];
-                let dstop = sub(ld.verts[bend[2]], ld.verts[bend[1]]);
-                let stop = add(ld.verts[bend[1]],
+                let ctrl = ld.verts.get(bend[1]);
+                let dstop = sub(ld.verts.get(bend[2]), ld.verts.get(bend[1]));
+                let stop = add(ld.verts.get(bend[1]),
                                mul(min_radii[bend[1]]/norm(dstop), dstop));
                 if (laststop !== undefined) {
                     //pStr = "M"+laststop+"L"+start+"Q"+ctrl+" "+stop;
@@ -476,10 +479,10 @@ cpWorker.onmessage = function(ev) {
 //let sigma = [[1, 4, 2, 3], [0, 8, 7, 15], [5, 14, 6, 13], [9, 12, 10, 11]];
 
 // (2,5) torus
-//let sigma = [[0, 10, 19, 9], [1, 12, 2, 11], [3, 13, 4, 14], [5, 16, 6, 15], [7, 17, 8, 18]];
+let sigma = [[0, 10, 19, 9], [1, 12, 2, 11], [3, 13, 4, 14], [5, 16, 6, 15], [7, 17, 8, 18]];
 
 //let sigma = [[3,5,4,1],[0,2,7,9],[8,6,11,10]];
-let sigma = [[7,1,3,5],[4,11,0,9],[12,8,6,13],[10,2,15,14]];
+//let sigma = [[7,1,3,5],[4,11,0,9],[12,8,6,13],[10,2,15,14]];
 
 // Random composite
 //let sigma = [[0, 57, 79, 58], [1, 59, 2, 60], [3, 78, 4, 77], [5, 11, 6, 12], [7, 9, 8, 10], [13, 16, 14, 15], [17, 56, 18, 55], [19, 54, 20, 53], [21, 36, 22, 35], [23, 25, 24, 26], [27, 29, 28, 30], [31, 46, 32, 45], [33, 39, 34, 40], [37, 52, 38, 51], [41, 44, 42, 43], [47, 50, 48, 49], [61, 72, 62, 71], [63, 73, 64, 74], [65, 68, 66, 67], [69, 76, 70, 75]];
