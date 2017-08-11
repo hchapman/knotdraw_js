@@ -204,7 +204,7 @@ export default class ForceLinkDiagram {
             // (actual) -> single twist diagram is being untwisted
             // sufficient to just remove path2
             this.paths.splice(path2_i, 1);
-            
+
         } else {
 
             let x_p2i = p2.indexOf(monoXi); // either 0 or length-1
@@ -279,6 +279,8 @@ export default class ForceLinkDiagram {
 
     forceRvert(u, v) {
         let d = this.distance(u, v);
+        //let a = Math.pow(this.delta/d, this.erExp);
+        //return [(u[0]-v[0])*a, (u[1]-v[1])*a];
         return mul(Math.pow(this.delta/d, this.erExp),
                    sub(u, v));
     }
@@ -292,6 +294,7 @@ export default class ForceLinkDiagram {
         if (m == 0) {
             return [v[0], a[1]];
         } else if (n == 0) {
+
             return [a[0], v[1]];
         } else {
             let x = (d - c) / (m - n);
@@ -583,6 +586,7 @@ export default class ForceLinkDiagram {
             this.contract();
         }
 
+        // console.log(this.numIter);
         if (this.numIter < 20) {
             this.expand();
         }

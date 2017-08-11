@@ -60,11 +60,50 @@
 /******/ 	__webpack_require__.p = "";
 /******/
 /******/ 	// Load entry module and return exports
-/******/ 	return __webpack_require__(__webpack_require__.s = 2);
+/******/ 	return __webpack_require__(__webpack_require__.s = 4);
 /******/ })
 /************************************************************************/
 /******/ ([
 /* 0 */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+class Point {
+
+    constructor(x, y){
+        this.x = x;
+        this.y = y;
+    }
+
+    getPosition() {
+        return {
+            x: this.x,
+            y: this.y
+        };
+    }
+
+    increaseX(amount) {
+        this.x += amount;
+    }
+
+    decreaseX(amount) {
+        this.x -= amount;
+    }
+
+    increaseY(amount) {
+        this.y += amount;
+    }
+
+    decreaseY(amount) {
+        this.y -= amount;
+    }
+}
+/* harmony export (immutable) */ __webpack_exports__["a"] = Point;
+
+
+
+/***/ }),
+/* 1 */
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
@@ -688,15 +727,58 @@ class DiGraph {
 
 
 /***/ }),
-/* 1 */,
 /* 2 */
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_0__point__ = __webpack_require__(0);
+
+
+class Quad {
+
+    constructor(origin, width, height) {
+        this.origin = origin;
+        this.width = width;
+        this.height = height;
+        this.xmin = origin.x;
+        this.xmax = origin.x + width;
+        this.ymin = origin.y;
+        this.ymax = origin.y + height;
+    }
+
+    static copy(quad) {
+        let origin = new __WEBPACK_IMPORTED_MODULE_0__point__["a" /* default */](quad.origin.x, quad.origin.y);
+        let width = quad.width;
+        let height = quad.height;
+
+        return new Quad(origin, width, height);
+    }
+
+    intersects(quad) {
+        if (this.xmin < quad.xmax && this.xmax > quad.xmin &&
+            this.ymin < quad.ymax && this.ymax > quad.ymin) return true;
+        return false;
+    }
+
+    containsPoint(point) {
+        return (point.x <= this.xmax && point.x >= this.xmin) &&
+            (point.y <= this.ymax && point.y >= this.ymin);
+    }
+}
+/* harmony export (immutable) */ __webpack_exports__["a"] = Quad;
+
+
+
+/***/ }),
+/* 3 */,
+/* 4 */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
 Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_0__lib_shadow_js__ = __webpack_require__(3);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__lib_orthemb_js__ = __webpack_require__(4);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_2__lib_forcediagram_js__ = __webpack_require__(6);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_0__lib_shadow_js__ = __webpack_require__(5);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__lib_orthemb_js__ = __webpack_require__(6);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_2__lib_forcediagram_js__ = __webpack_require__(8);
 importScripts('lalolib/lalolib.js');
 importScripts('lodash.min.js');
 
@@ -812,14 +894,14 @@ var workerFunctions = {
         workerFunctions.embedDiagram();
     },
 
-    embedDiagram: function() {
+    embedDiagram: function(n_steps=50) {
         let tstart = Date.now();
 
         let thresh = 5e-10;
 
         let curDate;
-        self.n_steps = 50;//50;
-        let max_steps = 50;
+        self.n_steps = n_steps;//50;
+        let max_steps = self.n_steps;
 
         for (let i = 0; i < max_steps; i++) {
             let procStart = Date.now();
@@ -859,7 +941,8 @@ var workerFunctions = {
     deleteMonogon: function(fi) {
         self.force_shadow.deleteMonogon(fi);
         self.force_shadow.initParams();
-        workerFunctions.embedDiagram();
+        self.force_shadow.numIter = 30;
+        workerFunctions.embedDiagram(10);
     }
 }
 
@@ -869,7 +952,7 @@ onmessage = function(e) {
 
 
 /***/ }),
-/* 3 */
+/* 5 */
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
@@ -1057,12 +1140,12 @@ class LinkShadow {
 
 
 /***/ }),
-/* 4 */
+/* 6 */
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_0__digraph_js__ = __webpack_require__(0);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__orthrep_js__ = __webpack_require__(5);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_0__digraph_js__ = __webpack_require__(1);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__orthrep_js__ = __webpack_require__(7);
 
 
 
@@ -1346,11 +1429,11 @@ class OrthogonalDiagramEmbedding {
 
 
 /***/ }),
-/* 5 */
+/* 7 */
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_0__digraph_js__ = __webpack_require__(0);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_0__digraph_js__ = __webpack_require__(1);
 
 
 function partialSums(L) {
@@ -1713,13 +1796,13 @@ class OrthogonalRep {
 
 
 /***/ }),
-/* 6 */
+/* 8 */
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_0__Quadtree_es6_quadtree_js__ = __webpack_require__(10);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__Quadtree_es6_math_point_js__ = __webpack_require__(9);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_2__Quadtree_es6_math_quad_js__ = __webpack_require__(11);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_0__Quadtree_es6_quadtree_js__ = __webpack_require__(9);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__Quadtree_es6_math_point_js__ = __webpack_require__(0);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_2__Quadtree_es6_math_quad_js__ = __webpack_require__(2);
 
 
 
@@ -1926,7 +2009,7 @@ class ForceLinkDiagram {
             // (actual) -> single twist diagram is being untwisted
             // sufficient to just remove path2
             this.paths.splice(path2_i, 1);
-            
+
         } else {
 
             let x_p2i = p2.indexOf(monoXi); // either 0 or length-1
@@ -2001,6 +2084,8 @@ class ForceLinkDiagram {
 
     forceRvert(u, v) {
         let d = this.distance(u, v);
+        //let a = Math.pow(this.delta/d, this.erExp);
+        //return [(u[0]-v[0])*a, (u[1]-v[1])*a];
         return mul(Math.pow(this.delta/d, this.erExp),
                    sub(u, v));
     }
@@ -2014,6 +2099,7 @@ class ForceLinkDiagram {
         if (m == 0) {
             return [v[0], a[1]];
         } else if (n == 0) {
+
             return [a[0], v[1]];
         } else {
             let x = (d - c) / (m - n);
@@ -2305,6 +2391,7 @@ class ForceLinkDiagram {
             this.contract();
         }
 
+        // console.log(this.numIter);
         if (this.numIter < 20) {
             this.expand();
         }
@@ -2467,53 +2554,12 @@ class ForceLinkDiagram {
 
 
 /***/ }),
-/* 7 */,
-/* 8 */,
 /* 9 */
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
-class Point {
-
-    constructor(x, y){
-        this.x = x;
-        this.y = y;
-    }
-
-    getPosition() {
-        return {
-            x: this.x,
-            y: this.y
-        };
-    }
-
-    increaseX(amount) {
-        this.x += amount;
-    }
-
-    decreaseX(amount) {
-        this.x -= amount;
-    }
-
-    increaseY(amount) {
-        this.y += amount;
-    }
-
-    decreaseY(amount) {
-        this.y -= amount;
-    }
-}
-/* harmony export (immutable) */ __webpack_exports__["a"] = Point;
-
-
-
-/***/ }),
-/* 10 */
-/***/ (function(module, __webpack_exports__, __webpack_require__) {
-
-"use strict";
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_0__math_quad__ = __webpack_require__(11);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__math_point__ = __webpack_require__(9);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_0__math_quad__ = __webpack_require__(2);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__math_point__ = __webpack_require__(0);
 
 
 
@@ -2655,49 +2701,6 @@ class QuadTree {
     }
 }
 /* unused harmony export default */
-
-
-
-/***/ }),
-/* 11 */
-/***/ (function(module, __webpack_exports__, __webpack_require__) {
-
-"use strict";
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_0__point__ = __webpack_require__(9);
-
-
-class Quad {
-
-    constructor(origin, width, height) {
-        this.origin = origin;
-        this.width = width;
-        this.height = height;
-        this.xmin = origin.x;
-        this.xmax = origin.x + width;
-        this.ymin = origin.y;
-        this.ymax = origin.y + height;
-    }
-
-    static copy(quad) {
-        let origin = new __WEBPACK_IMPORTED_MODULE_0__point__["a" /* default */](quad.origin.x, quad.origin.y);
-        let width = quad.width;
-        let height = quad.height;
-
-        return new Quad(origin, width, height);
-    }
-
-    intersects(quad) {
-        if (this.xmin < quad.xmax && this.xmax > quad.xmin &&
-            this.ymin < quad.ymax && this.ymax > quad.ymin) return true;
-        return false;
-    }
-
-    containsPoint(point) {
-        return (point.x <= this.xmax && point.x >= this.xmin) &&
-            (point.y <= this.ymax && point.y >= this.ymin);
-    }
-}
-/* harmony export (immutable) */ __webpack_exports__["a"] = Quad;
 
 
 
