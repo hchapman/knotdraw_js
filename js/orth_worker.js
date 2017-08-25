@@ -894,7 +894,7 @@ var workerFunctions = {
         workerFunctions.embedDiagram();
     },
 
-    embedDiagram: function(n_steps=50) {
+    embedDiagram: function(n_steps=0) {
         let tstart = Date.now();
 
         let thresh = 5e-10;
@@ -1807,21 +1807,24 @@ class OrthogonalRep {
 
 
 
+class ForceLinkVertex {
+    constructor (idx, coord) {
+        this.index = idx;
+        this.coord = coord;
+        this.edges = new Map();
+        this.adj = new Map();
+    }
+}
+
 class ForceLinkDiagram {
     /* Link diagram embedding improved by ImPrEd */
     constructor (verts, edges, faces, components) {
-        this.verts = new Map(verts.map((v, vi) => [vi, v]));
+        this.verts = new Map(verts.map(
+            (v, vi) => [vi, new ForceLinkVertex(vi, v)]));
+
         this.edges = edges;
-        this.edgeMatrix = [];
         for (let edge of this.edges) {
-            if (!(edge[0] in this.edgeMatrix)) {
-                this.edgeMatrix[edge[0]] = [];
-            }
-            if (!(edge[1] in this.edgeMatrix)) {
-                this.edgeMatrix[edge[1]] = [];
-            }
-            this.edgeMatrix[edge[0]][edge[1]] = edge;
-            this.edgeMatrix[edge[1]][edge[0]] = edge;
+            this.setSymmEdge(edge[0], edge[1], edge);
         }
         this.faces = faces;
         this.components = components;
@@ -1911,11 +1914,22 @@ class ForceLinkDiagram {
         this.numIter = 0;
     }
 
+    getEdge(ai, bi) {
+        return this.verts.get(ai).edges.get(bi);
+    }
+
+    setEdge(ai, bi, edge) {
+        this.verts.get(ai).edges.set(bi, edge);
+    }
+
+    setSymmEdge(ai, bi, edge) {
+        this.setEdge(ai, bi, edge); this.setEdge(bi, ai, edge);
+    }
+
     deleteVertex(vi) {
         /* Deletes a vert, breaking paths, components, and faces (you must fix) */
         this.verts.delete(vi);
-        delete this.adjMap[vi];
-        delete this.edgeMatrix[vi];
+
         this.surrEdges.delete(vi);
         this.freeVi.push(vi);
 
@@ -1928,8 +1942,8 @@ class ForceLinkDiagram {
         let [ai, bi] = edge;
 
         // Delete this edge from the matrix
-        delete this.edgeMatrix[ai][bi];
-        delete this.edgeMatrix[bi][ai];
+        this.verts.get(ai).edges.delete(bi);
+        this.verts.get(bi).edges.delete(ai);
 
         // Remove from edges
         this.edges.splice(this.edges.indexOf(edge), 1);
@@ -1969,7 +1983,7 @@ class ForceLinkDiagram {
             } else {
                 [ai, bi] = delFace.slice(i, i+2);
             }
-            let delEdge = this.edgeMatrix[ai][bi];
+            let delEdge = this.getEdge(ai, bi);
 
             // Delete edge ai->bi
             this.deleteEdge(delEdge);
@@ -2135,12 +2149,12 @@ class ForceLinkDiagram {
                         e => ((e[0] == face[i] && e[1] == face[i+1]) ||
                               (e[1] == face[i] && e[0] == face[i+1]))), this.edges, face, i, ui);
                     if (face[i] != ui && face[i+1] != ui) {
-                        edges.add(this.edgeMatrix[face[i]][face[i+1]]);
+                        edges.add(this.getEdge(face[i], face[i+1]));
                     }
                     console.assert(!edges.has(undefined));
                 }
                 if (face[face.length-1] != ui && face[0] != ui) {
-                    edges.add(this.edgeMatrix[face[face.length-1]][face[0]]);
+                    edges.add(this.getEdge(face[face.length-1], face[0]));
                 }
                 console.assert(!edges.has(undefined));
             }
@@ -2203,8 +2217,8 @@ class ForceLinkDiagram {
 
         if (norm(du) < 10*Number.EPSILON) { return; }
 
-        this.verts.get(ui)[0] += du[0];
-        this.verts.get(ui)[1] += du[1];
+        this.verts.get(ui).coord[0] += du[0];
+        this.verts.get(ui).coord[1] += du[1];
     }
 
     triangleIncludes(a, b, c, p,vi) {
@@ -2236,7 +2250,9 @@ class ForceLinkDiagram {
                 reContract = false;
                 for (let i = 0; i < path.length-2; i++) {
                     let [ai, bi, ci] = path.slice(i, i+3);
-                    let [a, b, c] = [this.verts.get(ai), this.verts.get(bi), this.verts.get(ci)];
+                    let [a, b, c] = [this.verts.get(ai).coord,
+                                     this.verts.get(bi).coord,
+                                     this.verts.get(ci).coord];
                     if (norm(sub(a, b)) < this.alpha) {
                         if (this.faces.filter(f => f.includes(ai)).some(f => f.length <= 3)) { continue; }
 
@@ -2244,18 +2260,13 @@ class ForceLinkDiagram {
                             ([vi, v]) => (vi != ai && vi != bi && vi != ci && this.triangleIncludes(a,b,c,v,vi)))) {
                             // contract
 
-                            // delete the vertex at bi
-                            this.verts.delete(bi);
-                            delete this.adjMap[bi];
-
                             // remove bi from its adjacent vertices at ai and ci
                             this.adjMap[ai].splice(this.adjMap[ai].indexOf(bi), 1);
                             this.adjMap[ci].splice(this.adjMap[ci].indexOf(bi), 1);
                             this.adjMap[ai].push(ci);
                             this.adjMap[ci].push(ai);
                             let nEdge = [ai, ci];
-                            this.edgeMatrix[ai][ci] = nEdge;
-                            this.edgeMatrix[ci][ai] = nEdge;
+                            this.setSymmEdge(ai, ci, nEdge);
                             this.edges.push(nEdge);
 
                             // remove bi from any faces
@@ -2263,7 +2274,7 @@ class ForceLinkDiagram {
                             // first, update these faces' surrEdges
                             for (let f of bFaces) {
                                 for (let ui of f) {
-                                    for (let bEdge of this.edgeMatrix[bi]) {
+                                    for (let [ev, bEdge] of this.verts.get(bi).edges) {
                                         if (bEdge === undefined) { continue; }
                                         this.surrEdges.get(ui).delete(bEdge);
                                     }
@@ -2282,15 +2293,19 @@ class ForceLinkDiagram {
                             );
 
                             // remove edges including bi
-                            this.edges.splice(this.edges.indexOf(this.edgeMatrix[ai][bi]), 1);
-                            this.edges.splice(this.edges.indexOf(this.edgeMatrix[bi][ci]), 1);
-                            delete this.edgeMatrix[ai][bi];
-                            delete this.edgeMatrix[ci][bi];
-                            delete this.edgeMatrix[bi];
+                            this.edges.splice(this.edges.indexOf(this.getEdge(ai, bi), 1));
+                            this.edges.splice(this.edges.indexOf(this.getEdge(ci, bi), 1));
+
+                            this.verts.get(ai).edges.delete(bi);
+                            this.verts.get(ci).edges.delete(bi);
 
                             // remove bi from this path
                             path.splice(path.indexOf(bi), 1);
                             reContract = true;
+
+                            // delete the vertex at bi
+                            this.verts.delete(bi);
+                            delete this.adjMap[bi];
                             break; // Only contract one bend of a path at a time???
                         }
                     }
@@ -2304,26 +2319,25 @@ class ForceLinkDiagram {
         for (let path of this.paths) {
             for (let i = 0; i < path.length-1; i++) {
                 let [ai, bi] = path.slice(i,i+2);
-                let [a, b] = [this.verts.get(ai), this.verts.get(bi)];
+                let [a, b] = [this.verts.get(ai).coord,
+                              this.verts.get(bi).coord];
                 let elen = norm(sub(a, b));
                 if (elen > this.beta) {
                     // Insert a new vertex along this path
                     let vi = this.newVertIdx();
-                    this.verts.set(vi, mul(.5, add(a, b)));
+                    let v = new ForceLinkVertex(vi, mul(.5, add(a, b)));
+                    this.verts.set(vi, v);
 
                     // Edge to delete; which was split
-                    let splitEdge = this.edgeMatrix[ai][bi];
+                    let splitEdge = this.getEdge(ai, bi);
 
                     // Add the new edges to the diagram
                     let nEdgeA = [ai, vi];
                     let nEdgeB = [vi, bi];
 
                     // Update the edgematrix of edges
-                    this.edgeMatrix[vi] = [];
-                    this.edgeMatrix[ai][vi] = nEdgeA;
-                    this.edgeMatrix[vi][ai] = nEdgeA;
-                    this.edgeMatrix[bi][vi] = nEdgeB;
-                    this.edgeMatrix[vi][bi] = nEdgeB;
+                    this.setSymmEdge(ai, vi, nEdgeA);
+                    this.setSymmEdge(bi, vi, nEdgeB);
 
                     // Remove splitEdge from edges, then add in these new edges
                     this.edges.splice(this.edges.indexOf(splitEdge), 1);
@@ -2408,25 +2422,27 @@ class ForceLinkDiagram {
                        this.dbar, this.dbar, this.dbar, this.dbar]);
         }
 
-        let barycenter = mul(1/this.verts.size, sum(Array.from(this.verts.values()), 2));
+        let barycenter = mul(1/this.verts.size, sum(Array.from(this.verts.values()).map(v => v.coord), 2));
 
         //for (let ui = 0; ui < this.verts.size; ui++) {
-        for (let [ui, u] of this.verts) {
+        for (let [ui, u_v] of this.verts) {
+            let u = u_v.coord;
             let Fu = F.get(ui);
 
             // Calculate gravity force
-            let db = sub(barycenter, this.verts.get(ui));
+            let db = sub(barycenter, u);
             let nDb = norm(db);
             Fu[0] += db[0]/nDb;
             Fu[1] += db[1]/nDb;
 
             // Calculate total node-node repulsive force
-            for (let [vi, v] of this.verts) {
+            for (let [vi, v_v] of this.verts) {
                 if (ui != vi) {
                     if (this.paths.some(p => p.includes(ui) && p.includes(vi))) {
                         //console.log("consec");
                         continue;
                     }
+                    let v = v_v.coord;
                     //if (this.adjMap[ui].length == 2) {
                     //    if (this.adjMap[ui].includes(vi)) {
                     //        continue;
@@ -2443,8 +2459,8 @@ class ForceLinkDiagram {
 
             // calculate edge attractive force
             for (let vi of this.adjMap[ui]) {
-            //for (let vi of this.paths.find(p => p.includes(ui)).filter(ell => ell != ui)) {
-                let dF = this.forceAvert(this.verts.get(ui), this.verts.get(vi));
+                let v = this.verts.get(vi).coord;
+                let dF = this.forceAvert(u, v);
 
                 Fu[0] += dF[0];
                 Fu[1] += dF[1];
@@ -2456,12 +2472,13 @@ class ForceLinkDiagram {
                 if (ui == ai || ui == bi) {
                     continue;
                 }
+                let [a, b] = [this.verts.get(ai).coord, this.verts.get(bi).coord];
                 let ve = this.computeVe(
-                    u, this.verts.get(ai), this.verts.get(bi));
+                    u, a, b);
 
-                if (this.veOnEdge(ve, this.verts.get(ai), this.verts.get(bi))) {
+                if (this.veOnEdge(ve, a, b)) {
                     let dF = this.forceRedge(
-                        u, this.verts.get(ai), this.verts.get(bi), ve);
+                        u, a, b, ve);
                     if (!isNaN(dF[0])) {
                         Fu[0] += dF[0];
                         Fu[1] += dF[1];
@@ -2476,17 +2493,18 @@ class ForceLinkDiagram {
                 if (ui == ai || ui == bi) {
                     continue;
                 }
-                let ve = this.computeVe(
-                    u, this.verts.get(ai), this.verts.get(bi));
+                let [a_v, b_v] = [this.verts.get(ai), this.verts.get(bi)];
+                let [a, b] = [a_v.coord, b_v.coord];
+                let ve = this.computeVe(u, a, b);
 
                 let cv;
 
-                if (this.veOnEdge(ve, this.verts.get(ai), this.verts.get(bi))) {
+                if (this.veOnEdge(ve, a, b)) {
                     cv = sub(ve, u);
 
                 } else {
-                    let va = sub(this.verts.get(ai), u);
-                    let vb = sub(this.verts.get(bi), u);
+                    let va = sub(a, u);
+                    let vb = sub(b, u);
                     if (norm(va) < norm(vb)) {
                         cv = va;
                     } else {
