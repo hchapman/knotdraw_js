@@ -113,7 +113,7 @@ var workerFunctions = {
         workerFunctions.embedDiagram();
     },
 
-    embedDiagram: function(n_steps=0) {
+    embedDiagram: function(n_steps=50) {
         let tstart = Date.now();
 
         let thresh = 5e-10;

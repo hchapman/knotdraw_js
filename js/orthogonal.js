@@ -116,13 +116,13 @@ class MeshDraw {
     }
 
     set_link_diagram(ld) {
-        let points = Array.from(ld.verts.values()).map(v_v => v_v.coord);
+        let pts = array2mat(ld.verts);
+        //console.log(pts);
+        this.min_x = Array.from(ld.verts.values()).reduce((m, [x,y]) => Math.min(m, x), Infinity);
+        this.min_y = Array.from(ld.verts.values()).reduce((m, [x,y]) => Math.min(m, y), Infinity);
 
-        this.min_x = points.reduce((m, [x,y]) => Math.min(m, x), Infinity);
-        this.min_y = points.reduce((m, [x,y]) => Math.min(m, y), Infinity);
-
-        this.max_x = points.reduce((m, [x,y]) => Math.max(m, x), -Infinity);
-        this.max_y = points.reduce((m, [x,y]) => Math.max(m, y), -Infinity);
+        this.max_x = Array.from(ld.verts.values()).reduce((m, [x,y]) => Math.max(m, x), -Infinity);
+        this.max_y = Array.from(ld.verts.values()).reduce((m, [x,y]) => Math.max(m, y), -Infinity);
 
         this.wid = this.max_x-this.min_x;
         this.hgt = this.max_y-this.min_y;
@@ -197,9 +197,8 @@ class MeshDraw {
 
     finalize_link_diagram(ld, faces, components) {
         let min_radii = [];
-        let vEArray = Array.from(ld.verts.entries()).map(([pi, p]) => [pi, p.coord]);
-        for (let [ai, a_v] of ld.verts) {
-            let a = a_v.coord;
+        let vEArray = Array.from(ld.verts.entries());
+        for (let [ai, a] of ld.verts) {
             //console.log(ld.adjMap[ai]);
             if (ld.adjMap[ai].length != 2) {
                 // ai is a crossing
@@ -208,7 +207,7 @@ class MeshDraw {
             } else {
                 // ai is an edge
                 let [bi, ci] = ld.adjMap[ai];
-                let [b, c] = [ld.verts.get(bi).coord, ld.verts.get(ci).coord];
+                let [b, c] = [ld.verts.get(bi), ld.verts.get(ci)];
                 let u = [b[0]-a[0], b[1]-a[1]];
                 let v = [c[0]-a[0], c[1]-a[1]];
 
@@ -273,16 +272,15 @@ class MeshDraw {
 
             for (let i = 0; i < cmp.length-2; i++) {
                 let bend = cmp.slice(i, i+3);
-                let [b0, b1, b2] = [ld.verts.get(bend[0]).coord,
-                                    ld.verts.get(bend[1]).coord,
-                                    ld.verts.get(bend[2]).coord];
 
-                let dstart = sub(b0, b1);
-                let start = add(b1, mul(min_radii[bend[1]]/norm(dstart), dstart));
+                let dstart = sub(ld.verts.get(bend[0]), ld.verts.get(bend[1]));
+                let start = add(ld.verts.get(bend[1]),
+                                mul(min_radii[bend[1]]/norm(dstart), dstart));
                 if (firststart == undefined) { firststart = start; }
-                let ctrl = b1;
-                let dstop = sub(b2, b1);
-                let stop = add(b1, mul(min_radii[bend[1]]/norm(dstop), dstop));
+                let ctrl = ld.verts.get(bend[1]);
+                let dstop = sub(ld.verts.get(bend[2]), ld.verts.get(bend[1]));
+                let stop = add(ld.verts.get(bend[1]),
+                               mul(min_radii[bend[1]]/norm(dstop), dstop));
                 if (laststop !== undefined) {
                     //pStr = "M"+laststop+"L"+start+"Q"+ctrl+" "+stop;
                     p = new paper.Path("M"+laststop+"L"+start+"Q"+ctrl+" "+stop);
