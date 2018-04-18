@@ -113,14 +113,14 @@ var workerFunctions = {
         workerFunctions.embedDiagram();
     },
 
-    embedDiagram: function(n_steps=50) {
+    embedDiagram: function() {
         let tstart = Date.now();
 
         let thresh = 5e-10;
 
         let curDate;
-        self.n_steps = n_steps;//50;
-        let max_steps = self.n_steps;
+        self.n_steps = 50;//50;
+        let max_steps = 50;
 
         for (let i = 0; i < max_steps; i++) {
             let procStart = Date.now();
@@ -160,8 +160,7 @@ var workerFunctions = {
     deleteMonogon: function(fi) {
         self.force_shadow.deleteMonogon(fi);
         self.force_shadow.initParams();
-        self.force_shadow.numIter = 30;
-        workerFunctions.embedDiagram(10);
+        workerFunctions.embedDiagram();
     }
 }
 
